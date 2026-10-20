@@ -37,7 +37,7 @@ public class PortLabActivity extends Activity {
         title.setTextColor(0xfff3ad56);title.setTextSize(22);
         title.setGravity(Gravity.CENTER_HORIZONTAL);root.addView(title);
         TextView explain=new TextView(this);
-        explain.setText("Etapa v0.8: 18 funcoes MIPS estaticas, loader original de 33 opcodes e sete blocos PI DMA. O jogo ainda nao inicia uma corrida.");
+        explain.setText("Etapa v0.9: Ponte de notificacao de PI DMA para uma fila OSMesgQueue na RAM do N64. 18 funcoes MIPS recompiladas e loader de overlay. Ainda NAO inicia corrida.");
         explain.setTextColor(Color.WHITE);explain.setTextSize(15);root.addView(explain);
         Button pick=new Button(this);pick.setText("SELECIONAR ROM .N64 / .Z64 / .V64 / ZIP");
         root.addView(pick);pick.setOnClickListener(v->{

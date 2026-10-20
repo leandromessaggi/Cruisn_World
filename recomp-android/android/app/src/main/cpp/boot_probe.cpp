@@ -4,6 +4,7 @@
 #include "recomp_devices.hpp"
 #include "recomp_pi.hpp"
 #include "recomp_loader.hpp"
+#include "recomp_os_queue.hpp"
 #include <jni.h>
 #include <fstream>
 #include <sstream>
@@ -133,6 +134,26 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
   report<<"[OK] Overlay: 7 transferencias PI DMA; ponteiro salvo na RAM\n";
   report<<"[AVISO] Loader de alto nivel, sem threads/graficos do jogo\n";
 
+  // Guest-ABI libultra queue: DMA completion is observable by recompiled code.
+  cw::GuestOsMesgQueue os_queue(state,0x803E0000u);
+  if(!os_queue.create(0x803E0040u,1))
+    return env->NewStringUTF("Erro: criar OSMesgQueue");
+  cw::GuestPiOsBridge bridge(state,clock,os_queue);
+  if(!state.writeU32(cw::kOverlayVram,0xDEADBEEFu) ||
+     !bridge.startRead(cw::kCartBase+static_cast<std::uint32_t>(cw::kOverlayRomStart),
+                       cw::kOverlayVram,4,0xC9000009u))
+    return env->NewStringUTF("Erro: preparar DMA para OSMesgQueue");
+  bridge.service();
+  if(!bridge.busy())return env->NewStringUTF("Erro: DMA antes do VI");
+  clock.tickVi(); bridge.service();
+  std::uint32_t os_msg=0,os_restored=0;
+  if(bridge.busy()||bridge.notifications()!=1||
+     os_queue.receive(&os_msg)!=cw::OsMqStatus::Ok||os_msg!=0xC9000009u||
+     !state.readU32(cw::kOverlayVram,&os_restored)||os_restored!=original_overlay)
+    return env->NewStringUTF("Erro: notificacao PI na RAM OSMesgQueue");
+  report<<"[OK] OSMesgQueue guest ABI: ring de 24 bytes em RAM N64\n";
+  report<<"[OK] Ponte DMA PI: notificacao entregue e consumida pela fila guest\n";
+  report<<"[LIMITE] Ainda sem modo BLOCK ou scheduler de threads MIPS\n";
   report<<"[OK] PI ROM->RDRAM: overlay original restaurado em novo VI\n";
   report<<"[OK] evento PI de conclusao enviado para fila N64\n";
   report<<"[OK] COP0 Count 46,875 MHz, 3 VI = "<<std::dec<<clock.totalCount()<<" ticks\n";

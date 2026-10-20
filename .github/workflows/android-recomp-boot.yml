@@ -35,6 +35,10 @@ jobs:
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_loader.cpp recomp-android/android/app/src/main/cpp/recomp_loader.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-loader-tests
           cd /tmp && ./cw-loader-tests
+      - name: libultra OSMesgQueue guest ABI and PI completion tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_guest_os_queue.cpp recomp-android/android/app/src/main/cpp/recomp_os_queue.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-osqueue-tests
+          cd /tmp && ./cw-osqueue-tests
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -54,7 +58,7 @@ jobs:
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: CruisnWorld-Recomp-Overlay-Loader-v0-8-ARM64
+          name: CruisnWorld-Recomp-OSQueue-v0-9-ARM64
           path: recomp-android/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error

@@ -110,3 +110,15 @@ Testes de ROM sintética executam no CI; ROM original fica privada.
 
 **Não é ainda** uma recompilação do alocador, scheduler, libultra ou gráficos,
 nem executa gameplay. Este APK é um laboratório de diagnóstico.
+
+
+## Marco v0.9 — fila libultra em RDRAM e notificacao PI DMA
+
+OSMesgQueue agora usa estrutura nativa de 24 bytes em RAM guest big-endian,
+anel FIFO e indices de 32 bits compativeis com libultra. A ponte PI DMA publica
+uma notificacao nesta fila e conserva eventos quando a fila esta cheia.
+Testes com ROM sintetica sao executados no CI; um teste local com a ROM
+original confirmou integridade do overlay e a notificacao recebida.
+
+**Limite:** nao ha chamadas libultra do executavel ligadas a essa ponte;
+OS_MESG_BLOCK, threads, RSP/RDP, audio e gameplay continuam pendentes.
