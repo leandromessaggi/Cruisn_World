@@ -1,0 +1,50 @@
+name: Build pinned N64Recomp (ROM-free)
+on:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/build-native-recompiler.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build N64Recomp and RSPRecomp with pinned source and patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="/tmp/cw-recompiler"
+          OUT="/tmp/recompiler_artifact/toolchain"
+          mkdir -p "$WORK" "$OUT/bin" "$OUT/games/cruisn-world"
+          git clone --depth 1 --recurse-submodules https://github.com/navjack/N64Recomp.git "$WORK/N64Recomp"
+          git -C "$WORK/N64Recomp" fetch --depth 1 origin ffb39cdad1da5de07eaaa48bd1db4a89a7986771
+          git -C "$WORK/N64Recomp" checkout --detach ffb39cdad1da5de07eaaa48bd1db4a89a7986771
+          git -C "$WORK/N64Recomp" submodule update --init --recursive
+          git clone --depth 1 https://github.com/navjack/cruisn-recomp.git "$WORK/workspace"
+          git -C "$WORK/workspace" fetch --depth 1 origin d2dad6755c21ba40667e28cea787129b90c60bdf
+          git -C "$WORK/workspace" checkout --detach d2dad6755c21ba40667e28cea787129b90c60bdf
+          git clone --depth 1 https://github.com/navjack/cruisn-world-recomp.git "$WORK/world"
+          git -C "$WORK/world" fetch --depth 1 origin 61fd5e748bb1f38491cd18e2b736d44fa99cfd5f
+          git -C "$WORK/world" checkout --detach 61fd5e748bb1f38491cd18e2b736d44fa99cfd5f
+          for name in N64Recomp-cache-noop.patch N64Recomp-fpu64-conversions.patch N64Recomp-cop0-registers.patch N64Recomp-reimplemented-pi-write.patch N64Recomp-zero-register-writes.patch; do
+            git -C "$WORK/N64Recomp" apply --check "$WORK/workspace/patches/$name"
+            git -C "$WORK/N64Recomp" apply "$WORK/workspace/patches/$name"
+          done
+          cmake -S "$WORK/N64Recomp" -B "$WORK/build" -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$WORK/build" --target N64RecompCLI RSPRecomp --parallel 4
+          cp "$WORK/build/N64Recomp" "$WORK/build/RSPRecomp" "$OUT/bin/"
+          cp -r "$WORK/world/config" "$WORK/world/input" "$WORK/world/rsp" "$OUT/games/cruisn-world/"
+          cp -r "$WORK/N64Recomp/include" "$OUT/include"
+          printf '%s\n' 'N64Recomp ffb39cdad1da5de07eaaa48bd1db4a89a7986771' 'Cruisn World 61fd5e748bb1f38491cd18e2b736d44fa99cfd5f' 'No game ROM included' > "$OUT/PINNED_COMMITS.txt"
+          file "$OUT/bin/N64Recomp" "$OUT/bin/RSPRecomp"
+      - name: Upload open-source tools and symbol map
+        uses: actions/upload-artifact@v4
+        with:
+          name: CruisnWorld-Pinned-N64Recompiler-Linux
+          path: /tmp/recompiler_artifact/
+          if-no-files-found: error
+          retention-days: 30
