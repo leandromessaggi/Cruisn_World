@@ -19,6 +19,10 @@ jobs:
           python-version: '3.12'
       - name: Unit tests for ROM inspection
         run: python3 -m unittest discover -v -s recomp-android/tests
+      - name: Native recompilation host tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_memory.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp -o /tmp/cw-recomp-tests
+          cd /tmp && ./cw-recomp-tests
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -32,13 +36,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
-      - name: Build ARM64 JNI checkpoint APK
+      - name: Build ARM64 JNI recompilation milestone APK
         run: gradle --no-daemon :app:assembleDebug
         working-directory: recomp-android/android
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: CruisnWorld-Recomp-Boot-Lab-ARM64
+          name: CruisnWorld-Recomp-Static-v0-3-ARM64
           path: recomp-android/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error

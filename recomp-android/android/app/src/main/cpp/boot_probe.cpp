@@ -1,71 +1,68 @@
-// This is a native ARM64 reconstruction of the observed N64 initialization
-// *state*, not an N64 CPU emulator and not the full Cruis'n World engine.
-// See upstream Cruis'n World research, GPL-3.0:
-// https://github.com/navjack/cruisn-world-recomp
+// JNI entrypoint to the actual-game native state and four statically
+// recompiled state setters. No ROM bytes or complete N64 emulation bundled.
+#include "recomp_memory.hpp"
 #include <jni.h>
 #include <fstream>
-#include <iterator>
 #include <sstream>
+#include <string>
+#include <iomanip>
 #include <vector>
 #include <cstdint>
-#include <algorithm>
 
 namespace {
-constexpr size_t kRomSize=0xC00000;
-constexpr size_t kBssSize=0x94760;
-constexpr uint32_t kBssStart=0x80353380;
-constexpr uint32_t kRuntimeEntry=0x802AD400;
-constexpr uint32_t kThreadMain=0x802AD450;
-// MIPS R4300i instructions observed at ROM offset 0x1000.
-constexpr uint32_t kBootCode[]={
-    0x3C088035,0x3C090009,0x25083380,0x35294760,0x2129FFF8,
-    0xAD000000,0xAD000004,0x1520FFFC,0x21080008,
-    0x3C0A802B,0x3C1D8015,0x254AD450,0x01400008,0x27BD0400
-};
-uint32_t be32(const unsigned char* p){return (uint32_t(p[0])<<24)|(uint32_t(p[1])<<16)|(uint32_t(p[2])<<8)|uint32_t(p[3]);}
+std::uint32_t read32(const std::uint8_t* p) {
+  return (std::uint32_t(p[0])<<24)|(std::uint32_t(p[1])<<16)|
+         (std::uint32_t(p[2])<<8)|std::uint32_t(p[3]);
 }
+constexpr std::uint32_t boot[] = {
+  0x3C088035,0x3C090009,0x25083380,0x35294760,0x2129FFF8,
+  0xAD000000,0xAD000004,0x1520FFFC,0x21080008,
+  0x3C0A802B,0x3C1D8015,0x254AD450,0x01400008,0x27BD0400
+};
+}  // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env,jclass,jstring filepath){
-    const char* s=env->GetStringUTFChars(filepath,nullptr);
-    const std::string path(s);env->ReleaseStringUTFChars(filepath,s);
-    std::ostringstream status;
-    status << "Cruis'n World US — pesquisa de port nativo\n\n";
-    std::ifstream file(path,std::ios::binary|std::ios::ate);
-    if(!file){status<<"ERRO: ROM indisponivel.";return env->NewStringUTF(status.str().c_str());}
-    auto size=file.tellg();
-    if(size!=std::streampos(kRomSize)){status<<"ERRO: tamanho incompatível.";return env->NewStringUTF(status.str().c_str());}
-    file.seekg(0);
-    std::vector<unsigned char> boot(0x1060);
-    file.read(reinterpret_cast<char*>(boot.data()),boot.size());
-    if(!file){status<<"ERRO: falha ao ler entrada.";return env->NewStringUTF(status.str().c_str());}
-    if(be32(boot.data())!=0x80371240u || be32(boot.data()+0x10)!=0xDFE61153u ||
-       be32(boot.data()+0x14)!=0xD76118E6u){
-       status<<"ERRO: header de N64 inesperado.";return env->NewStringUTF(status.str().c_str());
+Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstring filepath) {
+  if (!filepath) return env->NewStringUTF("Erro: caminho de ROM vazio");
+  const char* path_ptr=env->GetStringUTFChars(filepath,nullptr);
+  const std::string path(path_ptr);
+  env->ReleaseStringUTFChars(filepath,path_ptr);
+  std::ostringstream report;
+  std::ifstream input(path,std::ios::binary);
+  if (!input) return env->NewStringUTF("Erro: ROM nao acessivel");
+  input.seekg(0x1000);
+  std::vector<std::uint8_t> actual(sizeof(boot));
+  input.read(reinterpret_cast<char*>(actual.data()),actual.size());
+  if (!input) return env->NewStringUTF("Erro: leitura do boot MIPS");
+  for (std::size_t i=0;i<sizeof(boot)/sizeof(boot[0]);++i) {
+    if (read32(actual.data()+i*4)!=boot[i]) {
+      return env->NewStringUTF("Erro: assinatura original do boot diverge");
     }
-    for(size_t i=0;i<sizeof(kBootCode)/sizeof(uint32_t);i++){
-        if(be32(&boot[0x1000+i*4])!=kBootCode[i]){
-            status<<"ERRO: codigo do boot não coincide na instrução "<<i;
-            return env->NewStringUTF(status.str().c_str());
-        }
+  }
+  cw::NativeState state;
+  std::string error;
+  if (!state.load(path,&error)) return env->NewStringUTF(("Erro: "+error).c_str());
+  if (state.overlayFNV64() != UINT64_C(0x617c6ffd93fa6347)) {
+    return env->NewStringUTF("Erro: hash do overlay original divergiu");
+  }
+  report << "[OK] Boot original MIPS: 14 instrucoes verificadas\n";
+  report << "[OK] JNI ARM64: mapeamento de memoria N64\n";
+  report << state.diagnostics() << "\n\n";
+  // Real original address setters converted to native C++ calls.
+  // Data is restored immediately as each setter-pair is applied.
+  const std::uint32_t addrs[] = {0x802AEE9C,0x802AEEAC,0x802AF5E4,0x802AF5F4};
+  const std::uint32_t flags[] = {cw::kFlag1Address,cw::kFlag1Address,
+                                  cw::kFlag2Address,cw::kFlag2Address};
+  const std::uint32_t expected[] = {1,0,1,0};
+  for(int i=0;i<4;++i) {
+    std::uint32_t value=UINT32_MAX;
+    if(!state.callRecompiled(addrs[i])||!state.readU32(flags[i],&value)||value!=expected[i]) {
+      return env->NewStringUTF("Erro: rotina recompilada nao passou no teste");
     }
-    // Reconstruction of the effect of the exact MIPS loop at 0x802AD410:
-    // sw $zero,0($t0); sw $zero,4($t0); bnez $t1 ... with addi delay slot.
-    // Avoids all MIPS interpretation at runtime: just native C++ initialization.
-    std::vector<uint8_t> bss(kBssSize,0xA5);
-    std::fill(bss.begin(),bss.end(),uint8_t(0));
-    bool cleared=std::all_of(bss.begin(),bss.end(),[](uint8_t b){return b==0;});
-    status<<"[OK] ROM validada pelo SHA-256 no Java\n";
-    status<<"[OK] CRCs e código MIPS do boot conferidos\n";
-    status<<"[OK] Boot convertido para C++/ARM64\n";
-    status<<"[OK] BSS zerada: "<<kBssSize<<" bytes\n";
-    status<<"[OK] BSS zerada corretamente: "<<(cleared?"sim":"nao")<<"\n";
-    status<<std::hex<<std::uppercase;
-    status<<"Entrada mapeada: 0x"<<kRuntimeEntry<<"\n";
-    status<<"Main MIPS: 0x"<<kThreadMain<<"\n";
-    status<<"BSS inicio: 0x"<<kBssStart<<"\n\n";
-    status<<"PRÓXIMAS ETAPAS: ligar funções recompiladas, ponte libultra, ";
-    status<<"RSP, RDP/Vulkan, áudio e controles.\n\n";
-    status<<"Este APK ainda NÃO é o jogo jogável.";
-    return env->NewStringUTF(status.str().c_str());
+    report << "[OK] rot 0x" << std::hex << std::uppercase << addrs[i]
+           << " -> RAM 0x" << flags[i] << " = " << std::dec << value << "\n";
+  }
+  report << "\nESTADO: loader e 4 funcoes de dados recompiladas.\n"
+            "Ainda NAO ha threads, graficos, som ou gameplay neste APK.";
+  return env->NewStringUTF(report.str().c_str());
 }
