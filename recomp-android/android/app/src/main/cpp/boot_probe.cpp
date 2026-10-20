@@ -1,6 +1,7 @@
 // JNI entrypoint to the actual-game native state and 17 statically
 // recompiled state setters. No ROM bytes or complete N64 emulation bundled.
 #include "recomp_memory.hpp"
+#include "recomp_devices.hpp"
 #include <jni.h>
 #include <fstream>
 #include <sstream>
@@ -78,6 +79,23 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
   report << "[OK] Fluxo real 0x802AF6EC -> JAL 0x802AF5F4\n";
   report << "[OK] pos-condicoes: flag C8 = " << flag2 << ", flag CC = " << flag3 << "\n";
   report << "[OK] trace de chamadas C++ ARM64: 2 funcoes, sem interpretador MIPS\n";
+  // Isolated native device-service checks; gameplay is not connected.
+  cw::GuestClock clock;
+  cw::GuestMessageQueue queue(2);
+  clock.tickVi(); clock.tickVi();
+  std::uint32_t vi_msg=0;
+  if(!queue.send(0x56490001u)||!queue.receive(&vi_msg)||vi_msg!=0x56490001u)
+    return env->NewStringUTF("Erro: FIFO VI");
+  cw::ControllerSample sample;
+  sample.buttons=cw::kButtonA|cw::kButtonStart;sample.stick_x=42;
+  if(sample.serialize()[0]!=0x90||sample.serialize()[2]!=42)
+    return env->NewStringUTF("Erro: input N64");
+  cw::Eeprom16k eeprom;
+  if(!eeprom.load(path+".eep",&error))
+    return env->NewStringUTF(("Erro: EEPROM: "+error).c_str());
+  report<<"[OK] COP0 Count 46,875 MHz, 2 VI = "<<std::dec<<clock.totalCount()<<" ticks\n";
+  report<<"[OK] VI FIFO, serializacao de controle, EEPROM 16 Kbit privada\n";
+  report<<"[AVISO] Servicos ainda nao conectados a libultra/gameplay\n";
   report << "\n[OK] 18 funcoes MIPS verificadas com implementacao estatica ARM64\n"
             "ESTADO: loader e primitivas de dados recompiladas.\n"
             "Ainda NAO ha threads, graficos, som ou gameplay neste APK.";

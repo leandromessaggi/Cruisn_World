@@ -20,8 +20,13 @@ constexpr std::uint8_t kCrcs[] = {0xDF,0xE6,0x11,0x53,0xD7,0x61,0x18,0xE6};
 NativeState::NativeState() : ram_(kRamSize, 0u) {}
 
 bool NativeState::offset(std::uint32_t vram, std::size_t size, std::size_t* out) const {
-  if (vram < kRamBase) return false;
-  const std::size_t index = static_cast<std::size_t>(vram - kRamBase);
+  // Both KSEG0 and uncached KSEG1 alias the same 8 MiB RDRAM.
+  std::size_t index=0;
+  if(vram>=kRamBase && vram<kRamBase+kRamSize)
+    index=static_cast<std::size_t>(vram-kRamBase);
+  else if(vram>=0xA0000000u && vram<0xA0000000u+kRamSize)
+    index=static_cast<std::size_t>(vram-0xA0000000u);
+  else return false;
   if (index > ram_.size() || size > ram_.size() - index) return false;
   *out = index;
   return true;

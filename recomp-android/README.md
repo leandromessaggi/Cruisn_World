@@ -83,3 +83,14 @@ A ferramenta `tools/call_graph.py` varre os segmentos de código MIPS e reporta 
 - Suporte mínimo a escritas e leituras por byte, escrita de palavra big-endian, consultas a tabelas por índice e conversão float32.
 - Testes verificam *delay slots*, *branch-likely*, ponteiros inválidos e assinatura das 18 funções com ROM sintética, além da integração local com a ROM autêntica fornecida.
 - **Não há ainda escalonador de threads, DMA, processador de comandos gráficos, som ou lógica completa de corrida.** O APK continua sendo ferramenta de diagnóstico, não port jogável.
+
+
+## Marco v0.6 — serviços N64 reconstruídos, ainda não ligados ao gameplay
+
+- Memória RDRAM KSEG0/KSEG1 com alias coerente (endereços 0x80000000 e 0xA0000000).
+- Relógio determinístico COP0 Count de 46,875 MHz e 60000/1001 interrupções VI por segundo.
+- Fila FIFO de eventos não bloqueante com capacidade limitada e testes de saturação.
+- Representação serializada dos botões e do direcional analógico do controle N64.
+- EEPROM de **16 kilobits (2048 bytes)** em 256 blocos de 8 bytes; persistência no armazenamento privado e rejeição de arquivos corrompidos.
+
+Novos testes host e integração JNI ARM64. **As primitivas ainda não estão conectadas aos símbolos libultra nem executam uma corrida.** A conversão integral exige integração do runtime N64ModernRuntime (threads, PI/SI, RSP/RDP, RT64 e áudio) e recompilação das demais funções da ROM. Nenhuma ROM comercial incluída.

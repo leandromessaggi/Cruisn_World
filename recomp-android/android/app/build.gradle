@@ -7,8 +7,8 @@ android {
         applicationId 'com.cruisn.recomp.bootlab'
         minSdk 26
         targetSdk 33
-        versionCode 5
-        versionName '0.5-callflow'
+        versionCode 6
+        versionName '0.6-device-foundation'
         ndk { abiFilters 'arm64-v8a' }
         externalNativeBuild { cmake { cppFlags '-std=c++17 -Wall -Wextra' } }
     }
