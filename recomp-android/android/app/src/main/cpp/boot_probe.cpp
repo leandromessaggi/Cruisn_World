@@ -1,4 +1,4 @@
-// JNI entrypoint to the actual-game native state and four statically
+// JNI entrypoint to the actual-game native state and 17 statically
 // recompiled state setters. No ROM bytes or complete N64 emulation bundled.
 #include "recomp_memory.hpp"
 #include <jni.h>
@@ -62,7 +62,8 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
     report << "[OK] rot 0x" << std::hex << std::uppercase << addrs[i]
            << " -> RAM 0x" << flags[i] << " = " << std::dec << value << "\n";
   }
-  report << "\nESTADO: loader e 4 funcoes de dados recompiladas.\n"
+  report << "\n[OK] 17 funcoes MIPS verificadas com implementacao estatica ARM64\n"
+            "ESTADO: loader e primitivas de dados recompiladas.\n"
             "Ainda NAO ha threads, graficos, som ou gameplay neste APK.";
   return env->NewStringUTF(report.str().c_str());
 }

@@ -1,0 +1,125 @@
+{
+  "description": "Only independently verified native translations; NOT the complete original game",
+  "source_rom_sha256": "5320594232f0c492a672464832425351bd06497c95fb243745e2493bc5df9c2c",
+  "functions": [
+    {
+      "vram": "0x802AEE9C",
+      "rom_offset": "0x002A9C",
+      "name": "set_334c0_1",
+      "instructions": 4,
+      "sha256": "2e572a20b74a65cb946c4fd762e785cf9d4d62f87b4b9088d83dd8a7a22e9248"
+    },
+    {
+      "vram": "0x802AEEAC",
+      "rom_offset": "0x002AAC",
+      "name": "set_334c0_0",
+      "instructions": 3,
+      "sha256": "bcd0827b7db4263985dfd0cd56f1d7e8fcff0ad29ff7d0afa2b029fb81be9d11"
+    },
+    {
+      "vram": "0x802AF5E4",
+      "rom_offset": "0x0031E4",
+      "name": "set_334c8_1",
+      "instructions": 4,
+      "sha256": "af28b4cd3c8b16151a76916f048ced997854cd2d6921fbe4ae569456dbd15bbd"
+    },
+    {
+      "vram": "0x802AF5F4",
+      "rom_offset": "0x0031F4",
+      "name": "set_334c8_0",
+      "instructions": 3,
+      "sha256": "fa68536a08c9adbcdb74dd9118f5e27c8ca1ac32643e0d0eec749590b1d06864"
+    },
+    {
+      "vram": "0x802AFCC8",
+      "rom_offset": "0x0038C8",
+      "name": "noop",
+      "instructions": 2,
+      "sha256": "78aa5094d5ec7291c79f799c009d04f06c2f20187988e3dcc8d35ee5efdbb378"
+    },
+    {
+      "vram": "0x802B251C",
+      "rom_offset": "0x00611C",
+      "name": "object_store_word",
+      "instructions": 2,
+      "sha256": "bb2702bc713aae620dfd8d1666558219ceb1fb103edee4cb3c1f583525e8b566"
+    },
+    {
+      "vram": "0x802BF820",
+      "rom_offset": "0x013420",
+      "name": "set_struct_byte_255",
+      "instructions": 5,
+      "sha256": "e001d7ae24582bb01de8c2818c591fa0261f62945ae5feb5e7249fd88ea36cd2"
+    },
+    {
+      "vram": "0x802AF038",
+      "rom_offset": "0x002C38",
+      "name": "get_334bc_bool",
+      "instructions": 9,
+      "sha256": "fc814e0a0e3de323228984d90958aa8bce66a5e18d79989d9c99dfbfc58409ee"
+    },
+    {
+      "vram": "0x802B07F0",
+      "rom_offset": "0x0043F0",
+      "name": "reset_395d88_395d8c",
+      "instructions": 6,
+      "sha256": "ac20a8f7cf4b8cfe83f04c98d57a4b5e8158924e1aa0806169f075fd2e64731b"
+    },
+    {
+      "vram": "0x802AFE6C",
+      "rom_offset": "0x003A6C",
+      "name": "set_334648_and_33a4e8_a",
+      "instructions": 7,
+      "sha256": "c2780e88765639fafa70bbecd62c5f2eb0b67b64631a2344683cb19193ec08d8"
+    },
+    {
+      "vram": "0x802AFE88",
+      "rom_offset": "0x003A88",
+      "name": "set_334648_and_33a4e8_b",
+      "instructions": 7,
+      "sha256": "c2780e88765639fafa70bbecd62c5f2eb0b67b64631a2344683cb19193ec08d8"
+    },
+    {
+      "vram": "0x802B2710",
+      "rom_offset": "0x006310",
+      "name": "select_indexed_global",
+      "instructions": 9,
+      "sha256": "dd474fefba9fd57e9e8a1a4b855454dd100bb364312409e8ae0599f16be23252"
+    },
+    {
+      "vram": "0x802AF05C",
+      "rom_offset": "0x002C5C",
+      "name": "get_indexed_u8_flag",
+      "instructions": 14,
+      "sha256": "5014404612cc2283205db4c79983aba6ecd19137747930a4619fa05900690b46"
+    },
+    {
+      "vram": "0x802AF5A4",
+      "rom_offset": "0x0031A4",
+      "name": "configure_float_flags_a",
+      "instructions": 8,
+      "sha256": "a8a35b82c8b9f249a5ea17c35f51190b687f2163b0377a451bdd62f94e9e6d8d"
+    },
+    {
+      "vram": "0x802AF5C4",
+      "rom_offset": "0x0031C4",
+      "name": "configure_float_flags_b",
+      "instructions": 8,
+      "sha256": "a8c1afb48b1d523343b8a825c8939df65339861600ed8f7b02256ec8ac6e09a8"
+    },
+    {
+      "vram": "0x802B2544",
+      "rom_offset": "0x006144",
+      "name": "set_object_optional_word",
+      "instructions": 10,
+      "sha256": "bd666b1d19d6b7a8a97029154924e1e5ef68264f47ff99e145838b58ed03c7cd"
+    },
+    {
+      "vram": "0x802B2524",
+      "rom_offset": "0x006124",
+      "name": "set_object_float_pair",
+      "instructions": 8,
+      "sha256": "b4f6cd6fc9c471fe324ba1537cd798af5ae02640925cda4a85892bbc40629572"
+    }
+  ]
+}

@@ -21,7 +21,7 @@ jobs:
         run: python3 -m unittest discover -v -s recomp-android/tests
       - name: Native recompilation host tests
         run: |
-          g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_memory.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp -o /tmp/cw-recomp-tests
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_memory.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-recomp-tests
           cd /tmp && ./cw-recomp-tests
       - uses: actions/setup-java@v4
         with:
@@ -42,7 +42,7 @@ jobs:
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: CruisnWorld-Recomp-Static-v0-3-ARM64
+          name: CruisnWorld-Recomp-Static-v0-4-ARM64
           path: recomp-android/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error

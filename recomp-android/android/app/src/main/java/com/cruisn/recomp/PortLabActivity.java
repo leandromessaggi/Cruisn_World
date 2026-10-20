@@ -37,7 +37,7 @@ public class PortLabActivity extends Activity {
         title.setTextColor(0xfff3ad56);title.setTextSize(22);
         title.setGravity(Gravity.CENTER_HORIZONTAL);root.addView(title);
         TextView explain=new TextView(this);
-        explain.setText("Etapa 2: validação real da ROM, mapa de memória de 8 MiB, carregamento do overlay original e quatro funções MIPS recompiladas em C++ ARM64. Ainda NÃO executa a corrida.");
+        explain.setText("Etapa 3: ROM validada, mapa de 8 MiB, overlay real e 17 funções MIPS recompiladas em C++ ARM64. Ainda NÃO executa a corrida.");
         explain.setTextColor(Color.WHITE);explain.setTextSize(15);root.addView(explain);
         Button pick=new Button(this);pick.setText("SELECIONAR ROM .N64 / .Z64 / .V64 / ZIP");
         root.addView(pick);pick.setOnClickListener(v->{

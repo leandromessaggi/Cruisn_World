@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "recomp_functions.hpp"
 
 namespace cw {
 // This is a memory image for a static recompilation project, NOT an N64 emulator.
@@ -28,12 +29,14 @@ class NativeState final {
   // Reads exact 12 MiB .z64 and maps the real ROM ranges into guest-addressed RAM.
   bool load(const std::string& rom_path, std::string* error);
   bool valid() const { return valid_; }
+  bool readU8(std::uint32_t vram, std::uint8_t* out) const;
+  bool writeU8(std::uint32_t vram, std::uint8_t value);
   bool readU32(std::uint32_t vram, std::uint32_t* out) const;
   bool writeU32(std::uint32_t vram, std::uint32_t value);
   bool isZero(std::uint32_t address, std::size_t size) const;
   std::uint64_t overlayFNV64() const;
   // Static C++ recompilations of four real MIPS setter functions (only).
-  bool callRecompiled(std::uint32_t function_vram);
+  bool callRecompiled(std::uint32_t function_vram, CallArgs* args = nullptr);
   std::string diagnostics() const;
  private:
   bool offset(std::uint32_t vram, std::size_t size, std::size_t* out) const;

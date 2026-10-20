@@ -5,6 +5,12 @@ sys.path.insert(0, str(Path(__file__).parents[1] / 'tools'))
 from recomp_map import inspect
 
 class RecompMappingTests(unittest.TestCase):
+    def test_native_catalog(self):
+        import json
+        catalog=json.loads((Path(__file__).parents[1]/'tools'/'recompiled_functions.json').read_text())
+        self.assertEqual(17,len(catalog['functions']))
+        self.assertEqual(len(set(x['vram'] for x in catalog['functions'])),17)
+
     def test_rejects_nonmatching_rom(self):
         with self.assertRaises(ValueError): inspect(b'not a ROM')
 

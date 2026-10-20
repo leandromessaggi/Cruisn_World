@@ -28,14 +28,19 @@ def inspect(rom):
             'zero_bss':{'address':'0x80353380','byte_size':0x94760},
             'code_overlay':{'rom_start':'0xA7040','rom_end':'0xC12A0','ram_address':'0x80050400','byte_size':0xC12A0-0xA7040},
             'functions':[]}
-    for pc,dest,value,words in FUNCS:
-        off=MAIN_ROM+(pc-VIRTUAL_MAIN)
-        actual=tuple(int.from_bytes(rom[off+4*j:off+4*j+4],'big') for j in range(len(words)))
-        if actual!=words:
-            raise ValueError(f'MIPS instructions diverged at 0x{pc:X}')
-        report['functions'].append({'entry_vram':f'0x{pc:08X}','rom_offset':f'0x{off:05X}',
-            'mapped_global':f'0x{dest:08X}','written_value':value,
-            'instruction_count':len(words),'translated_semantics':'store word constant in jr $ra delay slot'})
+    catalog=json.loads((Path(__file__).with_name('recompiled_functions.json')).read_text())
+    for entry in catalog['functions']:
+        pc=int(entry['vram'],16)
+        off=MAIN_ROM + (pc-VIRTUAL_MAIN)
+        code=rom[off:off+4*entry['instructions']]
+        if len(code)!=4*entry['instructions'] or hashlib.sha256(code).hexdigest()!=entry['sha256']:
+            raise ValueError(f'Function signature mismatch at 0x{pc:08X}')
+        report['functions'].append({
+            'entry_vram':entry['vram'], 'rom_offset':f'0x{off:06X}',
+            'label':entry['name'], 'instruction_count':entry['instructions'],
+            'instruction_sha256':entry['sha256'],
+            'status':'direct C++ static translation; NOT N64 gameplay',
+        })
     h=14695981039346656037
     for b in rom[0xA7040:0xC12A0]:
         h=((h^b)*1099511628211) & ((1<<64)-1)
@@ -50,4 +55,4 @@ if __name__=='__main__':
     rom,_,_=load_rom(args.rom)
     result=inspect(rom)
     Path(args.output).write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
-    print('Four MIPS functions verified; overlay FNV64:',result['code_overlay']['fnv1a64'])
+    print(len(result['functions']),'MIPS function signatures verified; overlay FNV64:',result['code_overlay']['fnv1a64'])

@@ -13,28 +13,6 @@ std::uint32_t be32(const std::uint8_t* p) {
          (std::uint32_t(p[2]) << 8) | std::uint32_t(p[3]);
 }
 
-struct Routine {
-  std::uint32_t vram;
-  std::uint32_t dest;
-  std::uint32_t value;
-  std::array<std::uint32_t, 4> instructions;
-  std::size_t words;
-};
-
-// Hand-translated from instructions in the USA game. The jr $ra delay slot
-// contains the store, so native code performs that store before returning.
-// These are low-level state setters, NOT a driving or gameplay engine.
-constexpr Routine kRoutines[] = {
- {0x802AEE9Cu, kFlag1Address, 1u,
-  {0x240E0001u, 0x3C018033u, 0x03E00008u, 0xAC2E34C0u}, 4},
- {0x802AEEACu, kFlag1Address, 0u,
-  {0x3C018033u, 0x03E00008u, 0xAC2034C0u, 0u}, 3},
- {0x802AF5E4u, kFlag2Address, 1u,
-  {0x240E0001u, 0x3C018033u, 0x03E00008u, 0xAC2E34C8u}, 4},
- {0x802AF5F4u, kFlag2Address, 0u,
-  {0x3C018033u, 0x03E00008u, 0xAC2034C8u, 0u}, 3},
-};
-
 constexpr std::uint8_t kMagic[] = {0x80, 0x37, 0x12, 0x40};
 constexpr std::uint8_t kCrcs[] = {0xDF,0xE6,0x11,0x53,0xD7,0x61,0x18,0xE6};
 }  // namespace
@@ -66,16 +44,9 @@ bool NativeState::load(const std::string& rom_path, std::string* error) {
     if (error) *error = "Cabecalho ou CRCs nao correspondem ao dump suportado";
     return false;
   }
-  // Verify all translated instruction bytes against the ACTUAL selected ROM.
-  for (const auto& fn : kRoutines) {
-    const std::size_t source = kMainRomStart + static_cast<std::size_t>(fn.vram - kMainVram);
-    for (std::size_t i = 0; i != fn.words; ++i) {
-      if (be32(&rom[source + i * 4]) != fn.instructions[i]) {
-        if (error) *error = "Rotina MIPS de pesquisa divergiu do arquivo selecionado";
-        return false;
-      }
-    }
-  }
+  // Independently verify the 17 *entire* known function bodies before
+  // allowing any of the native translations to execute.
+  if (!verifyFunctionSignatures(rom,error)) return false;
   std::size_t main_offset = 0, bss_offset = 0, overlay_offset = 0;
   if (!offset(kMainVram, kMainRomEnd-kMainRomStart, &main_offset) ||
       !offset(kBssStart, kBssSize, &bss_offset) ||
@@ -128,12 +99,22 @@ std::uint64_t NativeState::overlayFNV64() const {
   return hash;
 }
 
-bool NativeState::callRecompiled(std::uint32_t function_vram) {
-  if (!valid_) return false;
-  for (const auto& f : kRoutines) {
-    if (f.vram == function_vram) return writeU32(f.dest, f.value);
-  }
-  return false;  // Deliberately do not interpret or execute unknown MIPS.
+bool NativeState::readU8(std::uint32_t vram, std::uint8_t* out) const {
+  std::size_t index=0;
+  if (!valid_ || !out || !offset(vram,1,&index)) return false;
+  *out=ram_[index];
+  return true;
+}
+
+bool NativeState::writeU8(std::uint32_t vram, std::uint8_t value) {
+  std::size_t index=0;
+  if (!valid_ || !offset(vram,1,&index)) return false;
+  ram_[index]=value;
+  return true;
+}
+
+bool NativeState::callRecompiled(std::uint32_t function_vram, CallArgs* args) {
+  return invokeRecompiled(*this,function_vram,args);
 }
 
 std::string NativeState::diagnostics() const {
@@ -147,12 +128,12 @@ std::string NativeState::diagnostics() const {
   log << std::hex << std::uppercase << "[OK] Overlay real: ROM 0x" << kOverlayRomStart
       << "-0x" << kOverlayRomEnd << " => RAM 0x" << kOverlayVram << "\n";
   log << "[OK] Overlay FNV64 = " << std::setfill('0') << std::setw(16) << overlayFNV64() << "\n";
-  const std::array<std::uint32_t,4> calls{{0x802AEE9Cu,0x802AEEACu,0x802AF5E4u,0x802AF5F4u}};
-  for (const auto addr : calls) {
-    log << "[ARM64] Funcao recompilada 0x" << addr
-        << " (setter de memoria; nao gameplay)\n";
+  for (const auto& fn: compiledSignatures()) {
+    log << "[ARM64] 0x" << fn.vram << " " << fn.label
+        << " / " << std::dec << fn.words.size() << " opcodes verificados\n";
+    log << std::hex << std::uppercase;
   }
-  log << "\nProximo: interrupcoes, threads, RSP/RDP, display lists, audio, controles e jogo.\n"
+  log << "\nProximo: threads, RSP/RDP, display lists, audio, controles e gameplay.\n"
          "Este APK NAO executa a corrida.";
   return log.str();
 }
