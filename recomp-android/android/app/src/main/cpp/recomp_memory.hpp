@@ -37,6 +37,9 @@ class NativeState final {
   std::uint64_t overlayFNV64() const;
   bool canDmaRead(std::size_t rom_offset, std::uint32_t dst, std::size_t length) const;
   bool dmaRead(std::size_t rom_offset, std::uint32_t dst, std::size_t length);
+  // Verify ROM signatures without exporting ROM bytes to a public repository.
+  bool romMatches(std::size_t offset,const std::uint32_t* words,std::size_t count) const;
+  bool romRangeFNV64(std::size_t offset,std::size_t length,std::uint64_t* out) const;
   // Bounded static native dispatch; CallTrace records exactly which bodies execute.
   bool callRecompiled(std::uint32_t function_vram, CallArgs* args = nullptr, CallTrace* trace = nullptr);
   std::string diagnostics() const;

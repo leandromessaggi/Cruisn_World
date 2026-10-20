@@ -88,6 +88,21 @@ bool NativeState::dmaRead(std::size_t rom_offset, std::uint32_t dst,
   return true;
 }
 
+bool NativeState::romMatches(std::size_t offset,const std::uint32_t* words,
+                             std::size_t count) const {
+  if(!valid_||!words||offset>rom_.size()||count>(rom_.size()-offset)/4)return false;
+  for(std::size_t i=0;i<count;++i)
+    if(be32(rom_.data()+offset+i*4)!=words[i])return false;
+  return true;
+}
+bool NativeState::romRangeFNV64(std::size_t offset,std::size_t length,
+                               std::uint64_t* out) const {
+  if(!valid_||!out||offset>rom_.size()||length>rom_.size()-offset)return false;
+  std::uint64_t hash=UINT64_C(14695981039346656037);
+  for(std::size_t i=0;i<length;++i){hash^=rom_[offset+i];hash*=UINT64_C(1099511628211);}
+  *out=hash;
+  return true;
+}
 bool NativeState::readU32(std::uint32_t vram, std::uint32_t* out) const {
   std::size_t index;
   if (!valid_ || !out || !offset(vram, 4, &index)) return false;

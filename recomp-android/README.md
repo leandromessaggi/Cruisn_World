@@ -1,4 +1,4 @@
-# Cruis'n World — recompilação estática Android (marco v0.5)
+# Cruis'n World — recompilação estática Android (marco v0.8)
 
 **Status: diagnóstico Android nativo; NÃO é o jogo jogável.** Este projeto reconstrói, pouco a pouco, partes do **jogo real** em C++/ARM64, e não usa um emulador nem o jogo arcade original refeito visualmente. A ROM de Nintendo 64 não está no APK ou no repositório público.
 
@@ -94,3 +94,19 @@ A ferramenta `tools/call_graph.py` varre os segmentos de código MIPS e reporta 
 - EEPROM de **16 kilobits (2048 bytes)** em 256 blocos de 8 bytes; persistência no armazenamento privado e rejeição de arquivos corrompidos.
 
 Novos testes host e integração JNI ARM64. **As primitivas ainda não estão conectadas aos símbolos libultra nem executam uma corrida.** A conversão integral exige integração do runtime N64ModernRuntime (threads, PI/SI, RSP/RDP, RT64 e áudio) e recompilação das demais funções da ROM. Nenhuma ROM comercial incluída.
+
+
+## Marco v0.8 — carregamento verificado do overlay original
+
+A função MIPS 0x802E0098 (ROM 0x33C98–0x33D1C) foi inspecionada:
+aloca 0x1A260 bytes por 0x802E2430, salva o ponteiro observado em
+0x80343C2C e chama 0x802AD560 para copiar ROM 0xA7040–0xC12A0
+para RAM 0x80050400. O helper opera em blocos de 0x4000 bytes.
+
+A nova classe NativeOverlayLoad confere **todas as 33 instruções originais**
+e traduz somente o contrato de transferência em C++ nativo: sete DMA PI
+sequenciais, um evento VI por bloco e validação do hash integral do overlay.
+Testes de ROM sintética executam no CI; ROM original fica privada.
+
+**Não é ainda** uma recompilação do alocador, scheduler, libultra ou gráficos,
+nem executa gameplay. Este APK é um laboratório de diagnóstico.

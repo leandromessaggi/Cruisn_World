@@ -3,6 +3,7 @@
 #include "recomp_memory.hpp"
 #include "recomp_devices.hpp"
 #include "recomp_pi.hpp"
+#include "recomp_loader.hpp"
 #include <jni.h>
 #include <fstream>
 #include <sstream>
@@ -112,6 +113,26 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
       restored_overlay!=original_overlay) {
     return env->NewStringUTF("Erro: DMA PI do overlay original");
   }
+  // ROM-specific high-level lift, not an emulated guest thread.
+  cw::GuestMessageQueue loader_queue(1);
+  cw::NativeOverlayLoad loader(state,clock,loader_queue);
+  if(!state.writeU32(cw::kOverlayVram,0xABAD1DEAu)||!loader.begin())
+    return env->NewStringUTF("Erro: assinatura original do loader 802E0098");
+  for(std::size_t i=0;i<cw::kLoaderChunkCount;++i){
+    if(loader.service())return env->NewStringUTF("Erro: DMA adiantado");
+    clock.tickVi();
+    if(!loader.service()||loader.failed())return env->NewStringUTF("Erro: loader DMA");
+  }
+  std::uint32_t ptr=0;
+  if(!loader.done()||loader.committedBytes()!=cw::kOverlayBytes||
+     loader.completedChunks()!=cw::kLoaderChunkCount||
+     !state.readU32(cw::kOverlayPointerGlobal,&ptr)||ptr!=cw::kOverlayVram||
+     state.overlayFNV64()!=UINT64_C(0x617C6FFD93FA6347))
+    return env->NewStringUTF("Erro: overlay nao restaurado pelo loader");
+  report<<"[OK] Loader 802E0098: 33 instrucoes MIPS conferidas\n";
+  report<<"[OK] Overlay: 7 transferencias PI DMA; ponteiro salvo na RAM\n";
+  report<<"[AVISO] Loader de alto nivel, sem threads/graficos do jogo\n";
+
   report<<"[OK] PI ROM->RDRAM: overlay original restaurado em novo VI\n";
   report<<"[OK] evento PI de conclusao enviado para fila N64\n";
   report<<"[OK] COP0 Count 46,875 MHz, 3 VI = "<<std::dec<<clock.totalCount()<<" ticks\n";
