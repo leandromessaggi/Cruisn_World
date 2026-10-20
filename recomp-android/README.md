@@ -1,3 +1,11 @@
+## Marco v0.14 — recompilador completo gerado fora do Android
+
+O N64Recomp original foi compilado no GitHub Actions, sem distribuir ROM. Usando a ROM fornecida apenas localmente, geramos **1.473 corpos de funções em 30 arquivos C** e o microprograma de áudio RSP. O GCC compilou todos os C para objetos Linux. **A execução nativa Android ainda não foi integrada; o APK jogável não existe.**
+
+Instruções, ferramenta e limites: [FULL_RECOMP_V014.md](docs/FULL_RECOMP_V014.md).
+
+---
+
 # Cruis'n World — Android native recomp v0.13 (guest JAL/RA)
 
 **Status: build de diagnóstico, NÃO JOGÁVEL.** Não é um emulador, mas também não é a execução completa do jogo.

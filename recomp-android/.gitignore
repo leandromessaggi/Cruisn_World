@@ -9,3 +9,11 @@ reports/
 local.properties
 *.keystore
 *.jks
+
+# Proprietary ROM and generated ROM-derived sources MUST remain private
+private-generated/
+generated/
+roms/
+*.n64
+*.z64
+*.v64

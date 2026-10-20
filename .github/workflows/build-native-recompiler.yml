@@ -4,6 +4,8 @@ on:
     branches: [recomp-android]
     paths:
       - '.github/workflows/build-native-recompiler.yml'
+      - 'recomp-android/tools/prepare_full_recomp.py'
+      - 'recomp-android/tests/test_full_recomp.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,6 +15,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - name: ROM-free offline script unit tests
+        run: python3 -m unittest -v recomp-android/tests/test_full_recomp.py
       - name: Build N64Recomp and RSPRecomp with pinned source and patches
         shell: bash
         run: |
