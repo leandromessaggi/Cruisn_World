@@ -1,0 +1,44 @@
+name: Android recomp boot checkpoint
+on:
+  push:
+    branches: [recomp-android]
+    paths:
+      - 'recomp-android/**'
+      - '.github/workflows/android-recomp-boot.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests for ROM inspection
+        run: python3 -m unittest discover -v -s recomp-android/tests
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK and NDK
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install 'platforms;android-34' 'build-tools;34.0.0' 'ndk;26.3.11579264' 'cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.4'
+      - name: Build ARM64 JNI checkpoint APK
+        run: gradle --no-daemon :app:assembleDebug
+        working-directory: recomp-android/android
+      - name: Upload diagnostic APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CruisnWorld-Recomp-Boot-Lab-ARM64
+          path: recomp-android/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+          if-no-files-found: error
