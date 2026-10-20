@@ -1,0 +1,10 @@
+android-project/
+game_rom/
+*.apk
+*.aab
+*.jks
+*.keystore
+__pycache__/
+.gradle/
+build/
+local.properties

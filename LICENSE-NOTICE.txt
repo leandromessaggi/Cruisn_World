@@ -1,0 +1,11 @@
+This repository does not contain or distribute Nintendo game ROMs.
+
+The Android frontend is generated from Ludere by Tyler Nijmeh:
+https://github.com/tytydraco/Ludere (GPL-3.0)
+LibretroDroid by Swordfish90:
+https://github.com/Swordfish90/LibretroDroid
+Mupen64Plus-Next libretro core by the Mupen64Plus/Libretro contributors
+(GPL-3.0). See upstream licenses for complete legal notices.
+
+The custom launcher icon is original artwork created for this project.
+ROM rights remain with their respective owners.
