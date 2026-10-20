@@ -7,6 +7,7 @@
 #include "recomp_os_queue.hpp"
 #include "recomp_thread_wait.hpp"
 #include "recomp_context.hpp"
+#include "recomp_dispatch.hpp"
 #include <jni.h>
 #include <fstream>
 #include <sstream>
@@ -228,6 +229,37 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
     return env->NewStringUTF("Erro: integridade do contexto restaurado");
   report << "[OK] Contexto MIPS: GPR/FPR/HI/LO/COP0, PC e delay slot preservados\n";
   report << "[OK] Fila libultra acordou thread de prioridade 90 e preemptou a de 30\n";
+  // v0.12: execute ONE ROM-verified C++ function via the guest thread PC.
+  cw::GuestCpuContextScheduler cpu_dispatch(state);
+  constexpr std::uint32_t dispatch_thread=0x803D6000u;
+  if (!cpu_dispatch.createThread(dispatch_thread,70,0x802AF6ECu,0x803CF200u) ||
+      cpu_dispatch.dispatch()!=dispatch_thread)
+    return env->NewStringUTF("Erro: criar thread para dispatcher estatico");
+  cw::MipsCpuContext dispatch_ctx{};
+  if (!cpu_dispatch.getContext(dispatch_thread,&dispatch_ctx))
+    return env->NewStringUTF("Erro: ler contexto do dispatcher");
+  dispatch_ctx.gpr[31]=0;
+  if (!cpu_dispatch.saveCurrent(dispatch_ctx) ||
+      !state.writeU32(cw::kFlag2Address,87) ||
+      !state.writeU32(0x803334CCu,0))
+    return env->NewStringUTF("Erro: preparar dispatcher ROM original");
+  cw::GuestRecompDispatcher dispatcher(state,cpu_dispatch);
+  cw::CallTrace dispatch_trace{};
+  if (dispatcher.step(&dispatch_trace)!=cw::RecompStepResult::Returned ||
+      !state.readU32(cw::kFlag2Address,&flag2) || flag2!=0 ||
+      !state.readU32(0x803334CCu,&flag3) || flag3!=1 ||
+      dispatch_trace.entries.size()!=2 ||
+      dispatch_trace.entries[0]!=0x802AF6ECu ||
+      dispatch_trace.entries[1]!=0x802AF5F4u)
+    return env->NewStringUTF("Erro: despacho da funcao nativa verificada");
+  cw::GuestCpuPhase final_phase{};
+  if (!cpu_dispatch.getPhase(dispatch_thread,&final_phase) ||
+      final_phase!=cw::GuestCpuPhase::Finished ||
+      dispatcher.step()!=cw::RecompStepResult::NoReadyThread)
+    return env->NewStringUTF("Erro: termino atomico do dispatcher");
+  report << "[OK] v0.12: PC/contexto -> dispatcher C++ de corpo MIPS validado\n";
+  report << "[OK] Thread terminou; trace 802AF6EC -> JAL 802AF5F4\n";
+  report << "[LIMITACAO] Somente 18 funcoes traduzidas; nao executa MIPS arbitrario\n";
   report << "[LIMITACAO] O contexto NAO executa codigo guest nem realiza troca host de CPU\n";
   report << "[LIMITACAO] Waiter cooperativo: NAO ha troca de contexto de threads MIPS\n";
   report << "[OK] Clock COP0 a 46.875 MHz: VIs acumulados = "

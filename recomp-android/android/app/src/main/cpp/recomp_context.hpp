@@ -20,7 +20,7 @@ struct MipsCpuContext {
   bool in_delay_slot=false;
 };
 
-enum class GuestCpuPhase { Ready, Running, Waiting };
+enum class GuestCpuPhase { Ready, Running, Waiting, Finished };
 
 // Deterministic host-side thread-context bookkeeping layered on the tested
 // libultra-compatible guest queue memory. A saved context is *data*, not an
@@ -37,6 +37,8 @@ class GuestCpuContextScheduler final {
   std::uint32_t dispatch();
   bool yield();
   bool saveCurrent(const MipsCpuContext& context);
+  // Atomic exit from a translated leaf into host, preserving final registers.
+  bool finishCurrent(const MipsCpuContext& final_context);
   bool getContext(std::uint32_t id, MipsCpuContext* out) const;
   bool getPhase(std::uint32_t id, GuestCpuPhase* out) const;
   std::uint32_t current() const { return running_; }

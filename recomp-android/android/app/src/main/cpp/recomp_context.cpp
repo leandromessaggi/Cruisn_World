@@ -74,6 +74,18 @@ bool GuestCpuContextScheduler::saveCurrent(const MipsCpuContext& snapshot) {
   return true;
 }
 
+bool GuestCpuContextScheduler::finishCurrent(const MipsCpuContext& final_context) {
+  Thread* active=find(running_);
+  if (!active || active->phase!=GuestCpuPhase::Running ||
+      final_context.pc!=0 || final_context.next_pc!=0) return false;
+  active->context=final_context;
+  active->context.gpr[0]=0;
+  active->phase=GuestCpuPhase::Finished;
+  running_=0;
+  dispatch();
+  return true;
+}
+
 bool GuestCpuContextScheduler::getContext(std::uint32_t id,MipsCpuContext* out) const {
   const Thread* t=find(id);
   if (!t || !out) return false;

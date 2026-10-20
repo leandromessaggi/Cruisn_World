@@ -1,3 +1,13 @@
+# Cruis'n World — recompilacao nativa Android (marco v0.12)
+
+**Estado: APK de diagnostico, sem gameplay.** A nova `GuestRecompDispatcher` utiliza o PC do `GuestCpuContextScheduler` para selecionar e executar **somente** funcoes ja traduzidas estaticamente em C++ e previamente verificadas contra instrucoes da ROM USA. Converte argumentos a0–a3, v0 e f12/f14, preserva outros registradores e transfere PC ao endereco de retorno RA, ou encerra a thread quando RA=0. Um limite de 256 corpos por rodada impede execucao descontrolada. Entradas nao recompiladas sao rejeitadas, sem interpretacao dos opcodes MIPS.
+
+Os testes sinteticos cobrem prioridade, atualizacao de estruturas do jogo, chamada real encadeada `0x802AF6EC -> 0x802AF5F4`, retorno a RA, fim de thread, enderecos invalidos e recusa de instrucoes desconhecidas. O APK repete um dos testes com a ROM original importada pelo usuario.
+
+**Nao se trata de um runtime funcional do N64**: cada funcao recompilada e tratada como uma operacao indivisivel e so 18 entradas sao reconhecidas, sem CPU thread switching real, RSP/RDP nem corrida. A recompilacao existente para macOS ja demonstra uma stack mais adiantada; integrar o runtime completo ao Android e o bloqueio principal.
+
+---
+
 # Cruis’n World — Android recomp, marco v0.11
 
 **Estado: APK de diagnóstico, não jogável.** As implementações anteriores (memória da ROM USA, 18 rotinas recompiladas isoladas, overlay, DMA PI, OSMesgQueue e espera cooperativa) permanecem.
