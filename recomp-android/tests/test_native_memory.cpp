@@ -27,11 +27,11 @@ int main() {
   assert(state.load(path,&err) && err.empty());
   assert(compiledSignatures().size() == 18);
   uint32_t value = 0;
+  assert(state.readU32(0x802AEE9C,&value) && value==0x240E0001);
+  assert(state.isZero(kBssStart,kBssSize));
   // Uncached guest address must alias KSEG0 physical memory.
   assert(state.writeU32(0xA0390010u,0x12ABCDEFu));
   assert(state.readU32(0x80390010u,&value)&&value==0x12ABCDEFu);
-  assert(state.readU32(0x802AEE9C,&value) && value==0x240E0001);
-  assert(state.isZero(kBssStart,kBssSize));
   assert(state.readU32(kOverlayVram,&value) && value==0x42424242);
   assert(state.readU32(kOverlayVram + (kOverlayRomEnd-kOverlayRomStart)-4,&value) && value==0x42424242);
   assert(state.callRecompiled(0x802AEE9C));
