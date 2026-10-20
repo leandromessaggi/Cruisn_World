@@ -1,0 +1,11 @@
+.gradle/
+.idea/
+build/
+app/build/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+*.iml
+game_rom/
