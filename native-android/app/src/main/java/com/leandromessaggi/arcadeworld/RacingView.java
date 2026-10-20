@@ -425,7 +425,7 @@ public final class RacingView extends SurfaceView implements SurfaceHolder.Callb
         }
     }
     private void drawRace(Canvas c) {
-        if(shake>0) { c.save();c.translate((float)Math.sin(raceTime*69)*shake*7,0); }
+        if(shake>0) { c.save();c.translate((float)(Math.sin(raceTime*69)*shake*7),0); }
         drawBackground(c);
         drawRoad(c);
         drawCar(c,W*.5f+axisSteering*5,680,220,150,0xffff8743,true,axisSteering);
