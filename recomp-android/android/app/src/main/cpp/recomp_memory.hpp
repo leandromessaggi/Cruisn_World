@@ -35,12 +35,15 @@ class NativeState final {
   bool writeU32(std::uint32_t vram, std::uint32_t value);
   bool isZero(std::uint32_t address, std::size_t size) const;
   std::uint64_t overlayFNV64() const;
+  bool canDmaRead(std::size_t rom_offset, std::uint32_t dst, std::size_t length) const;
+  bool dmaRead(std::size_t rom_offset, std::uint32_t dst, std::size_t length);
   // Bounded static native dispatch; CallTrace records exactly which bodies execute.
   bool callRecompiled(std::uint32_t function_vram, CallArgs* args = nullptr, CallTrace* trace = nullptr);
   std::string diagnostics() const;
  private:
   bool offset(std::uint32_t vram, std::size_t size, std::size_t* out) const;
   std::vector<std::uint8_t> ram_;
+  std::vector<std::uint8_t> rom_;
   bool valid_ = false;
 };
 }

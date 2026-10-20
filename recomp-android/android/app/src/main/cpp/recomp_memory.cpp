@@ -59,15 +59,32 @@ bool NativeState::load(const std::string& rom_path, std::string* error) {
     if (error) *error = "Mapa de memoria MIPS invalido";
     return false;
   }
+  rom_ = std::move(rom);
   std::fill(ram_.begin(), ram_.end(), 0);
-  std::copy(rom.begin() + kMainRomStart, rom.begin() + kMainRomEnd,
+  std::copy(rom_.begin() + kMainRomStart, rom_.begin() + kMainRomEnd,
             ram_.begin() + main_offset);
   // Actual effect of the boot loop at 0x802AD410, compiled into C++.
   std::fill(ram_.begin() + bss_offset, ram_.begin() + bss_offset + kBssSize, 0);
   // Actual main-thread overlay range and destination from func_802E0098.
-  std::copy(rom.begin() + kOverlayRomStart, rom.begin() + kOverlayRomEnd,
+  std::copy(rom_.begin() + kOverlayRomStart, rom_.begin() + kOverlayRomEnd,
             ram_.begin() + overlay_offset);
   valid_ = true;
+  return true;
+}
+
+bool NativeState::canDmaRead(std::size_t rom_offset, std::uint32_t dst,
+                             std::size_t length) const {
+  std::size_t unused = 0;
+  return valid_ && length > 0 && rom_offset <= rom_.size() &&
+         length <= rom_.size() - rom_offset && offset(dst, length, &unused);
+}
+
+bool NativeState::dmaRead(std::size_t rom_offset, std::uint32_t dst,
+                          std::size_t length) {
+  if (!canDmaRead(rom_offset, dst, length)) return false;
+  std::size_t address = 0;
+  if (!offset(dst, length, &address)) return false;
+  std::copy_n(rom_.begin() + rom_offset, length, ram_.begin() + address);
   return true;
 }
 
