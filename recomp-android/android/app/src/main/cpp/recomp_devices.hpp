@@ -23,6 +23,7 @@ class GuestMessageQueue final {
   bool send(std::uint32_t message);
   bool receive(std::uint32_t* message);
   std::size_t size() const { return messages_.size(); }
+  std::size_t capacity() const { return capacity_; }
  private:
   std::size_t capacity_;
   std::deque<std::uint32_t> messages_;
