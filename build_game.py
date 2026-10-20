@@ -46,7 +46,7 @@ def gradle(project):
 def configure(project):
     p=project/"app/src/main/res/values/config.xml"
     tree=ET.parse(p)
-    opts=dict(config_id="cruisnworld64", config_name="Cruis\'n World",
+    opts=dict(config_id="cruisnworld64", config_name="Cruis" + chr(92) + "'n World",
       config_core="mupen64plus_next_gles3",config_load_bytes="false",
       config_variables="",config_fullscreen="true",config_orientation="2",
       config_gamepad="true",config_left_analog="true",
