@@ -13,6 +13,7 @@ android {
         externalNativeBuild { cmake { cppFlags '-std=c++17 -Wall -Wextra' } }
     }
     externalNativeBuild { cmake { path 'src/main/cpp/CMakeLists.txt' } }
+    packagingOptions { jniLibs { useLegacyPackaging true } }
     buildTypes { release { minifyEnabled false } }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
