@@ -2,6 +2,7 @@
 // recompiled state setters. No ROM bytes or complete N64 emulation bundled.
 #include "recomp_memory.hpp"
 #include "recomp_devices.hpp"
+#include "recomp_pi.hpp"
 #include <jni.h>
 #include <fstream>
 #include <sstream>
@@ -93,7 +94,27 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
   cw::Eeprom16k eeprom;
   if(!eeprom.load(path+".eep",&error))
     return env->NewStringUTF(("Erro: EEPROM: "+error).c_str());
-  report<<"[OK] COP0 Count 46,875 MHz, 2 VI = "<<std::dec<<clock.totalCount()<<" ticks\n";
+  // Controlled native PI copy of original ROM bytes, with VI-gated completion.
+  std::uint32_t original_overlay=0, restored_overlay=0, pi_event=0;
+  cw::GuestMessageQueue pi_queue(1);
+  cw::GuestPiDma pi(state,clock,pi_queue);
+  if (!state.readU32(cw::kOverlayVram,&original_overlay) ||
+      !state.writeU32(cw::kOverlayVram,0xDEADBEEFu) ||
+      !pi.startRead(cw::kCartBase + static_cast<std::uint32_t>(cw::kOverlayRomStart),
+                    cw::kOverlayVram,4,0x50490001u) ||
+      pi.service()) {
+    return env->NewStringUTF("Erro: inicio do DMA PI");
+  }
+  clock.tickVi();
+  if (!pi.service() || pi.busy() || !pi_queue.receive(&pi_event) ||
+      pi_event!=0x50490001u ||
+      !state.readU32(cw::kOverlayVram,&restored_overlay) ||
+      restored_overlay!=original_overlay) {
+    return env->NewStringUTF("Erro: DMA PI do overlay original");
+  }
+  report<<"[OK] PI ROM->RDRAM: overlay original restaurado em novo VI\n";
+  report<<"[OK] evento PI de conclusao enviado para fila N64\n";
+  report<<"[OK] COP0 Count 46,875 MHz, 3 VI = "<<std::dec<<clock.totalCount()<<" ticks\n";
   report<<"[OK] VI FIFO, serializacao de controle, EEPROM 16 Kbit privada\n";
   report<<"[AVISO] Servicos ainda nao conectados a libultra/gameplay\n";
   report << "\n[OK] 18 funcoes MIPS verificadas com implementacao estatica ARM64\n"
