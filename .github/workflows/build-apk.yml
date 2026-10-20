@@ -22,9 +22,10 @@ jobs:
       - name: Android SDK (preinstalado no runner)
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          command -v sdkmanager
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install 'platforms;android-33' 'build-tools;33.0.2' 'platform-tools'
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install 'platforms;android-33' 'build-tools;33.0.2' 'platform-tools'
       - name: Icon SVG renderer
         run: python3 -m pip install --user cairosvg
       - name: Prepare Android app
