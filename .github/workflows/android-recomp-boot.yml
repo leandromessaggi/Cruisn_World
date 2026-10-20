@@ -51,6 +51,10 @@ jobs:
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_guest_dispatch.cpp recomp-android/android/app/src/main/cpp/recomp_dispatch.cpp recomp-android/android/app/src/main/cpp/recomp_context.cpp recomp-android/android/app/src/main/cpp/recomp_thread_wait.cpp recomp-android/android/app/src/main/cpp/recomp_os_queue.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-dispatch-tests
           cd /tmp && ./cw-dispatch-tests
+      - name: Guest MIPS JAL call-frame and continuation tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_guest_call_frames.cpp recomp-android/android/app/src/main/cpp/recomp_dispatch.cpp recomp-android/android/app/src/main/cpp/recomp_context.cpp recomp-android/android/app/src/main/cpp/recomp_thread_wait.cpp recomp-android/android/app/src/main/cpp/recomp_os_queue.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-call-frame-tests
+          cd /tmp && ./cw-call-frame-tests
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -70,7 +74,7 @@ jobs:
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: CruisnWorld-Recomp-Dispatch-v0-12-ARM64
+          name: CruisnWorld-Recomp-Frames-v0-13-ARM64
           path: recomp-android/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error

@@ -39,25 +39,32 @@ int main(int argc,char** argv) {
   assert(scheduler.getContext(b,&ctx) && ctx.hi==0xABCDEFu && ctx.fpr[5]==0x123456u);
   assert(ctx.gpr[0]==0 && ctx.pc==0 && ctx.next_pc==0);
   GuestCpuPhase phase{};assert(scheduler.getPhase(b,&phase)&&phase==GuestCpuPhase::Finished);
+  // Wrapper calls its genuine statically recompiled callee and executes the
+  // verified delay-slot store; two C++ entries in a bounded call trace.
   assert(scheduler.getContext(a,&ctx));
   ctx.gpr[31]=0;assert(scheduler.saveCurrent(ctx));
   assert(mem.writeU32(kFlag2Address,7));
-  assert(dispatcher.run(20,&trace)==1);
+  assert(dispatcher.run(20,&trace)==3);
   assert(mem.readU32(kFlag2Address,&val)&&val==0);
   assert(mem.readU32(0x803334CCu,&val)&&val==1);
-  assert(trace.entries.size()==3 && trace.entries[0]==0x802B251Cu &&
-         trace.entries[1]==0x802AF6ECu && trace.entries[2]==0x802AF5F4u);
+  assert(trace.entries.size()==4 && trace.entries[0]==0x802B251Cu &&
+         trace.entries[1]==0x802AF6ECu && trace.entries[2]==0x802AF5F4u &&
+         trace.entries[3]==0x802AF6FCu);
   assert(dispatcher.step()==RecompStepResult::NoReadyThread);
+  // Unknown entrypoint must not be interpreted, or change memory/context.
   GuestCpuContextScheduler unknown(mem);
   assert(unknown.createThread(0x803D6000u,1,kMainVram,0x803CF200u));
   GuestRecompDispatcher missing(mem,unknown);
   assert(missing.step()==RecompStepResult::NotRecompiled);
   assert(unknown.getContext(0x803D6000u,&ctx)&&ctx.pc==kMainVram);
+  // Refuse invalid return before executing side effects in translated code.
   ctx.pc=0x802AF5E4u;ctx.next_pc=ctx.pc+4;ctx.gpr[31]=3;
   assert(unknown.saveCurrent(ctx));
   assert(mem.writeU32(kFlag2Address,51));
   assert(missing.step()==RecompStepResult::InvalidReturn);
   assert(mem.readU32(kFlag2Address,&val)&&val==51);
+  // Run exactly one translated function, then resume at an explicitly
+  // selected different verified entrypoint (not a real guest call stack).
   ctx.gpr[31]=0x802AF5F4u;
   assert(unknown.saveCurrent(ctx));
   assert(missing.step()==RecompStepResult::Executed);
