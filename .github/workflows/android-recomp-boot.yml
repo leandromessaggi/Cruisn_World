@@ -23,22 +23,26 @@ jobs:
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_memory.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-recomp-tests
           cd /tmp && ./cw-recomp-tests
-      - name: Test native device services (ROM-free)
+      - name: Native device and timing tests (no copyrighted ROM needed)
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_devices.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp -o /tmp/cw-devices-tests
           cd /tmp && ./cw-devices-tests
-      - name: Native PI ROM DMA tests
+      - name: ROM cartridge PI DMA host tests (synthetic ROM)
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_pi.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-pi-tests
           cd /tmp && ./cw-pi-tests
-      - name: Native overlay loader tests (synthetic ROM)
+      - name: Verified original overlay loader static-lift tests (synthetic ROM)
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_native_loader.cpp recomp-android/android/app/src/main/cpp/recomp_loader.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-loader-tests
           cd /tmp && ./cw-loader-tests
-      - name: libultra OSMesgQueue guest ABI and PI completion tests
+      - name: N64 libultra OSMesgQueue + PI guest-memory ABI tests
         run: |
           g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_guest_os_queue.cpp recomp-android/android/app/src/main/cpp/recomp_os_queue.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-osqueue-tests
           cd /tmp && ./cw-osqueue-tests
+      - name: Cooperative libultra queue thread-wait host tests
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror recomp-android/tests/test_guest_thread_wait.cpp recomp-android/android/app/src/main/cpp/recomp_thread_wait.cpp recomp-android/android/app/src/main/cpp/recomp_os_queue.cpp recomp-android/android/app/src/main/cpp/recomp_pi.cpp recomp-android/android/app/src/main/cpp/recomp_memory.cpp recomp-android/android/app/src/main/cpp/recomp_devices.cpp recomp-android/android/app/src/main/cpp/recomp_functions.cpp -o /tmp/cw-thread-wait-tests
+          cd /tmp && ./cw-thread-wait-tests
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -58,7 +62,7 @@ jobs:
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: CruisnWorld-Recomp-OSQueue-v0-9-ARM64
+          name: CruisnWorld-Recomp-ThreadWait-v0-10-ARM64
           path: recomp-android/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
