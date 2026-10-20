@@ -6,6 +6,7 @@
 #include "recomp_loader.hpp"
 #include "recomp_os_queue.hpp"
 #include "recomp_thread_wait.hpp"
+#include "recomp_context.hpp"
 #include <jni.h>
 #include <fstream>
 #include <sstream>
@@ -187,6 +188,47 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
       wake.status!=cw::ThreadOpStatus::Complete || wake.message!=0xC9000010u)
     return env->NewStringUTF("Erro: aguardo cooperativo das filas N64");
   report << "[OK] osRecvMesg BLOCK: thread guest acordada ao receber evento PI simulado\n";
+  // v0.11 — snapshot host-side context and deterministic priority dispatch.
+  // The test deliberately keeps the ROM's original MIPS code unexecuted.
+  cw::GuestCpuContextScheduler contexts(state);
+  constexpr std::uint32_t context_low=0x803D4000u, context_high=0x803D5000u;
+  if (!guest_queue.create(0x803E0040u,1) ||
+      !contexts.createThread(context_low,30,cw::kMainVram,0x803CF000u) ||
+      !contexts.createThread(context_high,90,cw::kMainVram+0x50u,0x803CF100u) ||
+      contexts.dispatch()!=context_high)
+    return env->NewStringUTF("Erro: preparar contextos das threads MIPS");
+  cw::MipsCpuContext original{};
+  if (!contexts.getContext(context_high,&original))
+    return env->NewStringUTF("Erro: restaurar contexto MIPS");
+  original.pc=cw::kMainVram+0x54u;
+  original.next_pc=original.pc+4u;
+  original.gpr[0]=~UINT64_C(0);
+  original.gpr[2]=UINT64_C(0x123456789ABCDEF0);
+  original.hi=UINT64_C(0xABCDEF0123456789);
+  original.fpr[12]=UINT64_C(0x7FF0000000000000);
+  original.cop0_count=0x10203040u;
+  original.in_delay_slot=true;
+  std::uint32_t discarded=0;
+  if (!contexts.saveCurrent(original) ||
+      contexts.recv(guest_queue.guestAddress(),&discarded,true)!=cw::ThreadOpStatus::Blocked ||
+      contexts.current()!=context_low ||
+      contexts.postMessage(guest_queue.guestAddress(),0xC9000011u)!=cw::OsMqStatus::Ok ||
+      contexts.current()!=context_high)
+    return env->NewStringUTF("Erro: salvar contexto e retomar prioridade");
+  cw::MipsCpuContext restored{};
+  cw::GuestWaitCompletion completion{};
+  if (!contexts.getContext(context_high,&restored) ||
+      restored.gpr[0]!=0 || restored.gpr[2]!=UINT64_C(0x123456789ABCDEF0) ||
+      restored.hi!=UINT64_C(0xABCDEF0123456789) ||
+      restored.fpr[12]!=UINT64_C(0x7FF0000000000000) ||
+      restored.pc!=cw::kMainVram+0x54u || !restored.in_delay_slot ||
+      restored.cop0_count!=0x10203040u ||
+      !contexts.takeCompletion(context_high,&completion) ||
+      completion.message!=0xC9000011u)
+    return env->NewStringUTF("Erro: integridade do contexto restaurado");
+  report << "[OK] Contexto MIPS: GPR/FPR/HI/LO/COP0, PC e delay slot preservados\n";
+  report << "[OK] Fila libultra acordou thread de prioridade 90 e preemptou a de 30\n";
+  report << "[LIMITACAO] O contexto NAO executa codigo guest nem realiza troca host de CPU\n";
   report << "[LIMITACAO] Waiter cooperativo: NAO ha troca de contexto de threads MIPS\n";
   report << "[OK] Clock COP0 a 46.875 MHz: VIs acumulados = "
          << std::dec << clock.totalCount() << " ticks\n";
