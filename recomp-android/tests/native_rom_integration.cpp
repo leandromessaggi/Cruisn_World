@@ -17,7 +17,7 @@ int main(int argc,char** argv){
  }
  if(!s.readU32(cw::kFlag1Address,&w)||w!=0)return 8;
  if(!s.readU32(cw::kFlag2Address,&w)||w!=0)return 9;
- if(cw::compiledSignatures().size()!=17)return 10;
+ if(cw::compiledSignatures().size()!=18)return 10;
  cw::CallArgs a;
  if(!s.writeU32(0x803334BCu,77))return 11;
  if(!s.callRecompiled(0x802AF038u,&a)||a.v0!=1)return 12;
@@ -26,6 +26,12 @@ int main(int argc,char** argv){
  if(!s.readU32(a.a0+0x5Cu,&w)||w!=a.a1)return 14;
  if(!s.callRecompiled(0x802AFE6Cu)||!s.callRecompiled(0x802AFE88u))return 15;
  if(!s.readU32(0x8033A4E8u,&w)||w!=32)return 16;
- std::cout<<"PASSED on actual Cruis'n World USA ROM: mapping, overlay, BSS, 17 verified routines (7 exercised in integration)\n";
+ cw::CallTrace flow;
+ if(!s.writeU32(cw::kFlag2Address,9)||!s.writeU32(0x803334CCu,0))return 17;
+ if(!s.callRecompiled(0x802AF6ECu,nullptr,&flow))return 18;
+ if(flow.entries.size()!=2||flow.entries[0]!=0x802AF6ECu||flow.entries[1]!=0x802AF5F4u)return 19;
+ if(!s.readU32(cw::kFlag2Address,&w)||w!=0)return 20;
+ if(!s.readU32(0x803334CCu,&w)||w!=1)return 21;
+ std::cout<<"PASSED on actual Cruis'n World USA ROM: mapping, overlay, BSS, 18 verified routines and actual wrapper JAL call chain\n";
  std::cout<<s.diagnostics()<<"\n";
 }

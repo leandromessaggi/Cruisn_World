@@ -113,8 +113,8 @@ bool NativeState::writeU8(std::uint32_t vram, std::uint8_t value) {
   return true;
 }
 
-bool NativeState::callRecompiled(std::uint32_t function_vram, CallArgs* args) {
-  return invokeRecompiled(*this,function_vram,args);
+bool NativeState::callRecompiled(std::uint32_t function_vram, CallArgs* args, CallTrace* trace) {
+  return invokeRecompiled(*this,function_vram,args,trace);
 }
 
 std::string NativeState::diagnostics() const {
@@ -124,7 +124,7 @@ std::string NativeState::diagnostics() const {
   log << "[OK] ROM mapeada: 0x" << std::uppercase << std::hex << kMainVram
       << " — main 0x" << (kMainRomEnd-kMainRomStart) << " bytes\n";
   log << "[OK] BSS limpa: 0x" << kBssStart << ", " << std::dec
-      << kBssSize << " bytes: " << (isZero(kBssStart,kBssSize)?"sim":"nao") << "\n";
+      << kBssSize << " bytes (zerados no load; modificaveis depois)\n";
   log << std::hex << std::uppercase << "[OK] Overlay real: ROM 0x" << kOverlayRomStart
       << "-0x" << kOverlayRomEnd << " => RAM 0x" << kOverlayVram << "\n";
   log << "[OK] Overlay FNV64 = " << std::setfill('0') << std::setw(16) << overlayFNV64() << "\n";

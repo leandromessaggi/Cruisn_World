@@ -120,6 +120,14 @@
       "name": "set_object_float_pair",
       "instructions": 8,
       "sha256": "b4f6cd6fc9c471fe324ba1537cd798af5ae02640925cda4a85892bbc40629572"
+    },
+    {
+      "vram": "0x802AF6EC",
+      "rom_offset": "0x0032EC",
+      "name": "wrapper_reset_flag_and_set_334cc",
+      "instructions": 10,
+      "sha256": "10767b2959d70253ba85745e6532a86df0e1057e0c0cfc7429d53efcbaa1f5db",
+      "direct_callee": "0x802AF5F4"
     }
   ]
 }

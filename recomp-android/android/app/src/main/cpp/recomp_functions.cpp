@@ -18,6 +18,7 @@ std::uint32_t asBits(float f) {
 } // namespace
 const std::vector<FunctionSignature>& compiledSignatures() {
   static const std::vector<FunctionSignature> kFunctions = {
+    {0x802AF6ECu, "wrapper_reset_flag_and_set_334cc", {0x27BDFFE8u, 0xAFBF0014u, 0x0C0ABD7Du, 0x00000000u, 0x8FBF0014u, 0x240E0001u, 0x3C018033u, 0xAC2E34CCu, 0x03E00008u, 0x27BD0018u}},
     {0x802AEE9Cu, "set_334c0_1", {0x240E0001u, 0x3C018033u, 0x03E00008u, 0xAC2E34C0u}},
     {0x802AEEACu, "set_334c0_0", {0x3C018033u, 0x03E00008u, 0xAC2034C0u}},
     {0x802AF5E4u, "set_334c8_1", {0x240E0001u, 0x3C018033u, 0x03E00008u, 0xAC2E34C8u}},
@@ -60,12 +61,19 @@ bool verifyFunctionSignatures(const std::vector<std::uint8_t>& rom, std::string*
 // Independently translated from the exact verified MIPS instructions for each
 // address. Branches, including MIPS branch-likely, and jr delay slots are
 // encoded directly as C++ control flow; no opcodes are interpreted at runtime.
-bool invokeRecompiled(NativeState& mem, std::uint32_t address, CallArgs* args) {
-  if (!mem.valid()) return false;
+bool invokeRecompiled(NativeState& mem, std::uint32_t address, CallArgs* args, CallTrace* trace) {
+  if (!mem.valid() || (trace && !trace->record(address))) return false;
   CallArgs empty;
   CallArgs& c = args?*args:empty;
   std::uint32_t word=0, base=0;
   switch (address) {
+    case 0x802AF6ECu:
+      // Exact flow from the US ROM at 0x802AF6EC:
+      //   jal 0x802AF5F4; nop (JAL delay slot)
+      //   sw 1, 0x803334CC; jr ra; addiu sp, sp, 0x18.
+      // The callee is another independently translated static C++ function.
+      if (!mem.callRecompiled(0x802AF5F4u, &c, trace)) return false;
+      return mem.writeU32(0x803334CCu, 1u);
     case 0x802AEE9Cu: return mem.writeU32(0x803334C0u,1);
     case 0x802AEEACu: return mem.writeU32(0x803334C0u,0);
     case 0x802AF5E4u: return mem.writeU32(0x803334C8u,1);

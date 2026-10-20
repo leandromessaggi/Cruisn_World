@@ -25,7 +25,7 @@ int main() {
   NativeState state;
   std::string err;
   assert(state.load(path,&err) && err.empty());
-  assert(compiledSignatures().size() == 17);
+  assert(compiledSignatures().size() == 18);
   uint32_t value = 0;
   assert(state.readU32(0x802AEE9C,&value) && value==0x240E0001);
   assert(state.isZero(kBssStart,kBssSize));
@@ -101,6 +101,25 @@ int main() {
   assert(state.readU32(c.a0+0x5C,&value) && value==c.a1);
   assert(state.readU32(c.a0+0x3C,&value) && value==0x40400000u); // 3.0f
   assert(state.readU32(c.a0+0x40,&value) && value==0xC0E00000u); // -7.0f
+  // Execute an ORIGINAL MIPS caller/callee pair statically in C++, with
+  // a bounded call trace and side-effect checks. No MIPS opcodes interpreted.
+  assert(state.writeU32(kFlag2Address, 9));
+  assert(state.writeU32(0x803334CCu, 0));
+  CallTrace trace;
+  assert(state.callRecompiled(0x802AF6ECu, nullptr, &trace));
+  assert(trace.entries.size() == 2);
+  assert(trace.entries[0] == 0x802AF6ECu && trace.entries[1] == 0x802AF5F4u);
+  assert(state.readU32(kFlag2Address, &value) && value == 0);
+  assert(state.readU32(0x803334CCu, &value) && value == 1);
+  // Prevent execution beyond caller-selected budgets.
+  CallTrace bounded;
+  bounded.max_entries = 1;
+  assert(state.writeU32(kFlag2Address, 77));
+  assert(state.writeU32(0x803334CCu, 0));
+  assert(!state.callRecompiled(0x802AF6ECu, nullptr, &bounded));
+  assert(bounded.entries.size() == 1);
+  assert(state.readU32(kFlag2Address, &value) && value == 77);
+  assert(state.readU32(0x803334CCu, &value) && value == 0);
   assert(state.callRecompiled(0x802AFCC8u));
   // Passing an absent ABI context is only valid for functions with no args.
   assert(state.callRecompiled(0x802AFCC8u,nullptr));
@@ -114,5 +133,5 @@ int main() {
   NativeState modified;
   assert(!modified.load(path,&err));
   std::remove(path.c_str());
-  std::cout << "PASS: mapping, 17 native routines, MIPS return delay slots, branch-likely, FPU conversions, strict signatures\n";
+  std::cout << "PASS: mapping, 18 native routines with static caller/callee trace, MIPS return delay slots, branch-likely, FPU conversions, strict signatures\n";
 }

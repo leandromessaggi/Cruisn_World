@@ -14,6 +14,18 @@ struct CallArgs {
   // Raw bit representation of floating point argument registers f12 and f14.
   std::uint32_t f12=0, f14=0;
 };
+// Bounded trace for statically recompiled C++ function-to-function calls.
+// This is not an interpreter: only functions with verified ROM signatures
+// and explicit native implementations can execute.
+struct CallTrace {
+  std::vector<std::uint32_t> entries;
+  std::size_t max_entries = 16;
+  bool record(std::uint32_t vram) {
+    if (entries.size() >= max_entries) return false;
+    entries.push_back(vram);
+    return true;
+  }
+};
 struct FunctionSignature {
   std::uint32_t vram;
   const char* label;
@@ -21,5 +33,5 @@ struct FunctionSignature {
 };
 const std::vector<FunctionSignature>& compiledSignatures();
 bool verifyFunctionSignatures(const std::vector<std::uint8_t>& rom, std::string* error);
-bool invokeRecompiled(NativeState& state, std::uint32_t vram, CallArgs* args);
+bool invokeRecompiled(NativeState& state, std::uint32_t vram, CallArgs* args, CallTrace* trace = nullptr);
 } // namespace cw

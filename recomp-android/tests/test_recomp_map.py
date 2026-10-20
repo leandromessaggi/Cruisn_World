@@ -8,8 +8,8 @@ class RecompMappingTests(unittest.TestCase):
     def test_native_catalog(self):
         import json
         catalog=json.loads((Path(__file__).parents[1]/'tools'/'recompiled_functions.json').read_text())
-        self.assertEqual(17,len(catalog['functions']))
-        self.assertEqual(len(set(x['vram'] for x in catalog['functions'])),17)
+        self.assertEqual(18,len(catalog['functions']))
+        self.assertEqual(len(set(x['vram'] for x in catalog['functions'])),18)
 
     def test_rejects_nonmatching_rom(self):
         with self.assertRaises(ValueError): inspect(b'not a ROM')

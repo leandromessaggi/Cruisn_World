@@ -62,7 +62,23 @@ Java_com_cruisn_recomp_PortLabActivity_nativeBootProbe(JNIEnv* env, jclass, jstr
     report << "[OK] rot 0x" << std::hex << std::uppercase << addrs[i]
            << " -> RAM 0x" << flags[i] << " = " << std::dec << value << "\n";
   }
-  report << "\n[OK] 17 funcoes MIPS verificadas com implementacao estatica ARM64\n"
+  cw::CallTrace flow;
+  if (!state.writeU32(cw::kFlag2Address, 11) ||
+      !state.writeU32(0x803334CCu, 0) ||
+      !state.callRecompiled(0x802AF6ECu, nullptr, &flow)) {
+    return env->NewStringUTF("Erro: execucao encadeada ARM64");
+  }
+  std::uint32_t flag2=0,flag3=0;
+  if (flow.entries.size()!=2 || flow.entries[0]!=0x802AF6ECu ||
+      flow.entries[1]!=0x802AF5F4u ||
+      !state.readU32(cw::kFlag2Address, &flag2) || flag2!=0 ||
+      !state.readU32(0x803334CCu, &flag3) || flag3!=1) {
+    return env->NewStringUTF("Erro: pos-condicoes da chamada estaticamente recompilada");
+  }
+  report << "[OK] Fluxo real 0x802AF6EC -> JAL 0x802AF5F4\n";
+  report << "[OK] pos-condicoes: flag C8 = " << flag2 << ", flag CC = " << flag3 << "\n";
+  report << "[OK] trace de chamadas C++ ARM64: 2 funcoes, sem interpretador MIPS\n";
+  report << "\n[OK] 18 funcoes MIPS verificadas com implementacao estatica ARM64\n"
             "ESTADO: loader e primitivas de dados recompiladas.\n"
             "Ainda NAO ha threads, graficos, som ou gameplay neste APK.";
   return env->NewStringUTF(report.str().c_str());
