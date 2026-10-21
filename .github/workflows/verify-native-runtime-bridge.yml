@@ -32,16 +32,21 @@ jobs:
       - name: Compile actual bridge implementation for Android ARM64
         shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           NDK=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1 || true)
           if [[ -z "$NDK" ]]; then
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'ndk;27.2.12479018'
             NDK="$ANDROID_HOME/ndk/27.2.12479018"
           fi
           LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "Selected NDK: $NDK"
+          ls -l "$LLVM/aarch64-linux-android28-clang++" "$LLVM/llvm-readelf" "$LLVM/llvm-nm"
+          "$LLVM/aarch64-linux-android28-clang++" --version
+          echo "Compiling AArch64 object"
           "$LLVM/aarch64-linux-android28-clang++" -std=c++17 -O2 -fPIC -fno-lto \
             -I recomp-android/tests/fixtures \
             -c recomp-android/runtime/basic_os_hooks.cpp -o /tmp/cw_basic_os_hooks.o
+          echo "Inspecting ELF machine type"
           "$LLVM/llvm-readelf" -h /tmp/cw_basic_os_hooks.o | grep -q AArch64
           "$LLVM/llvm-nm" --defined-only /tmp/cw_basic_os_hooks.o > /tmp/hooks.symbols
           for name in osCreateMesgQueue_recomp osSendMesg_recomp osRecvMesg_recomp \
