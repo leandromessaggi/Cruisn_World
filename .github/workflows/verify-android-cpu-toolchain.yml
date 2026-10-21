@@ -6,7 +6,9 @@ on:
     paths:
       - '.github/workflows/verify-android-cpu-toolchain.yml'
       - 'recomp-android/tools/build_android_cpu.py'
+      - 'recomp-android/tools/audit_arm64_cpu.py'
       - 'recomp-android/tests/test_android_cpu_build.py'
+      - 'recomp-android/tests/test_arm64_cpu_audit.py'
 permissions:
   contents: read
 jobs:
@@ -28,3 +30,5 @@ jobs:
           echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
       - name: Build ROM-free sample with NDK
         run: python3 recomp-android/tests/test_android_cpu_build.py
+      - name: Audit AArch64 symbols on ROM-free examples
+        run: python3 -m unittest discover -s recomp-android/tests -p 'test_arm64_cpu_audit.py' -v
