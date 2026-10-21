@@ -1,0 +1,31 @@
+name: Verify initial N64Recomp runtime bridge (ROM-free)
+on:
+  workflow_dispatch:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/verify-native-runtime-bridge.yml'
+      - 'recomp-android/runtime/basic_os_hooks.cpp'
+      - 'recomp-android/tools/verify_native_entrypoint.py'
+      - 'recomp-android/tests/native_entrypoint_probe.c'
+      - 'recomp-android/tests/test_native_entrypoint_probe.py'
+      - 'recomp-android/tests/test_basic_os_hooks.cpp'
+      - 'recomp-android/tests/fixtures/recomp.h'
+permissions:
+  contents: read
+jobs:
+  bridge-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test entrypoint harness with synthetic code (never claims original boot)
+        run: python3 recomp-android/tests/test_native_entrypoint_probe.py
+      - name: Test seven libultra ABI hooks with a synthetic context
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I recomp-android/tests/fixtures \
+            recomp-android/runtime/basic_os_hooks.cpp \
+            recomp-android/tests/test_basic_os_hooks.cpp \
+            -o /tmp/cw_os_hook_test
+          /tmp/cw_os_hook_test
