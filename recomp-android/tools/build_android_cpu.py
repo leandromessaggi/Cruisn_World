@@ -69,7 +69,7 @@ def build(a):
         if r.returncode: raise RuntimeError(r.stderr)
         sym=cmd(nm,'-g',archive)
         if sym.returncode: raise RuntimeError(sym.stderr)
-        defined=set(re.findall(r'^\s*[0-9a-fA-F]+\s+[TW]\s+(\w+)$',sym.stdout,re.M))
+        defined=set(re.findall(r'^\s*[0-9a-fA-F]+\s+[TWVD]\s+(\w+)$',sym.stdout,re.M))
         needed=set(re.findall(r'^\s*U\s+(\w+)$',sym.stdout,re.M))
         unresolved=sorted(needed-defined)
         report={'target':f'aarch64-linux-android{a.api}',
