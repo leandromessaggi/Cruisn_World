@@ -42,10 +42,18 @@ jobs:
             NDK="$ANDROID_HOME/ndk/27.2.12479018"
           fi
           LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "NDK=$NDK LLVM=$LLVM"
+          df -h /tmp
+          ls -lh "$LLVM/aarch64-linux-android28-clang++" "$LLVM/llvm-readelf" "$LLVM/llvm-nm"
+          "$LLVM/aarch64-linux-android28-clang++" --version
+          set -x
           "$LLVM/aarch64-linux-android28-clang++" -std=c++17 -O2 -fPIC -Wall -Wextra -Werror \
             -I recomp-android/tests/boot_fixture -I recomp-android/runtime \
             -c recomp-android/runtime/boot_multithread_probe.cpp -o /tmp/cw20-pi-arm64.o
-          "$LLVM/llvm-readelf" -h /tmp/cw20-pi-arm64.o | grep -q AArch64
+          echo 'Clang completed; inspecting ELF'
+          "$LLVM/llvm-readelf" -h /tmp/cw20-pi-arm64.o > /tmp/cw20-elf.txt
+          grep -q AArch64 /tmp/cw20-elf.txt
+          echo 'readelf completed; checking symbols'
           "$LLVM/llvm-nm" --defined-only /tmp/cw20-pi-arm64.o > /tmp/cw20-symbols.txt
           for symbol in osPiStartDma_recomp osRecvMesg_recomp osInvalDCache_recomp osCreateMesgQueue_recomp; do
             grep -Eq " [TW] ${symbol}$" /tmp/cw20-symbols.txt
