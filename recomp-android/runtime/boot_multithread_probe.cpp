@@ -42,8 +42,21 @@ ObservedThread* find_thread(BootMultiTrace& t,std::uint32_t addr) noexcept {
 extern "C" {
 void osViBlack_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if (!check(rdram,ctx))return;
-    if (active->video_black || ctx->r4!=1) {error();return;}
+    if (ctx->r4!=1 || active->vi_black_calls>=2 ||
+        (active->vi_black_calls==1 && (active->vi_managers!=1 || active->mesg_queues!=3))) {
+        error();return;
+    }
+    ++active->vi_black_calls;
     active->video_black=true;
+    if (active->vi_black_calls==2 && active->on_vi_black) active->on_vi_black();
+}
+void osCreateViManager_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx)) return;
+    if(active->vi_managers || active->mesg_queues!=3 ||
+       !active->video_black || ctx->r4!=0xFE) { error();return; }
+    active->vi_managers=1;
+    active->vi_priority=static_cast<std::uint32_t>(ctx->r4);
+    // No actual VI timer, interrupts or worker thread in this bounded probe.
 }
 void __osInitialize_common_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if(!check(rdram,ctx))return;
@@ -94,22 +107,32 @@ void osSetThreadPri_recomp(std::uint8_t* rdram,recomp_context* ctx) {
 void osCreateMesgQueue_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if(!check(rdram,ctx))return;
     std::uint32_t q=0,m=0;
-    if(active->mesg_queues || active->thread_count!=2 || active->starts!=2 ||
+    if(active->mesg_queues>=3 || active->thread_count!=2 || active->starts!=2 ||
        !ram_pointer(ctx->r4,24,q) || (q&3u) ||
        ctx->r6==0 || ctx->r6>256 ||
        !ram_pointer(ctx->r5,ctx->r6*4,m) || (m&3u)) {error();return;}
-    active->mesg_queues=1;
-    active->queue_addr=static_cast<std::uint32_t>(ctx->r4);
-    active->queue_msgs=static_cast<std::uint32_t>(ctx->r5);
-    active->queue_capacity=static_cast<std::uint32_t>(ctx->r6);
+    const auto addr=static_cast<std::uint32_t>(ctx->r4);
+    for(unsigned i=0;i<active->mesg_queues;++i)
+        if(active->queues[i].address==addr) {error();return;}
+    // Reject overlapping guest queue and message storage (including prior queues).
+    if (m<q+24 && q<m+static_cast<std::uint32_t>(ctx->r6)*4) {error();return;}
+    active->queues[active->mesg_queues]={addr,
+        static_cast<std::uint32_t>(ctx->r5),static_cast<std::uint32_t>(ctx->r6)};
+    ++active->mesg_queues;
+    // Preserve the first queue for the bounded DMA/RecvMesg bridge.
+    if(active->mesg_queues==1) {
+        active->queue_addr=addr;
+        active->queue_msgs=static_cast<std::uint32_t>(ctx->r5);
+        active->queue_capacity=static_cast<std::uint32_t>(ctx->r6);
+    }
     // N64 OSMesgQueue: mtqueue, fullqueue, validCount, first, msgCount, msg.
     // Host-side word layout of N64Recomp uses little-endian 32-bit words.
-    const std::uint32_t guest=active->queue_addr;
+    const std::uint32_t guest=addr;
     if (!(write_word(guest+0,0) && write_word(guest+4,0) &&
           write_word(guest+8,0) && write_word(guest+12,0) &&
-          write_word(guest+16,active->queue_capacity) &&
-          write_word(guest+20,active->queue_msgs))) { error();return; }
-    if (active->on_first_queue) active->on_first_queue();
+          write_word(guest+16,static_cast<std::uint32_t>(ctx->r6)) &&
+          write_word(guest+20,static_cast<std::uint32_t>(ctx->r5)))) { error();return; }
+    if (active->mesg_queues==1 && active->on_first_queue) active->on_first_queue();
     // Stop immediately after first queue creation in private bounded harness.
 }
 }

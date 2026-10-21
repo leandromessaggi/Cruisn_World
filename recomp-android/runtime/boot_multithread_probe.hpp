@@ -26,6 +26,12 @@ struct BootMultiTrace {
     unsigned pi_managers=0, priority_changes=0, mesg_queues=0;
     unsigned entered_count=0, parked_count=0;
     bool video_black=false, initialized=false;
+    // Bounded boot probe only. Additional queues used by the original VI setup.
+    struct QueueObservation { std::uint32_t address=0, messages=0, capacity=0; };
+    QueueObservation queues[3]{};
+    unsigned vi_managers=0, vi_black_calls=0;
+    std::uint32_t vi_priority=0;
+    void (*on_vi_black)()=nullptr; // harness stops immediately after the second call
     void (*on_first_queue)()=nullptr; // harness-only bounded stop; never production scheduler
     std::uint32_t manager_queue=0, manager_msgs=0, manager_capacity=0;
     std::uint32_t queue_addr=0, queue_msgs=0, queue_capacity=0;

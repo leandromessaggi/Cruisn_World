@@ -1,0 +1,41 @@
+name: Verify original VI setup boundary (ROM-free)
+on:
+  workflow_dispatch:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/verify-original-vi-setup.yml'
+      - 'recomp-android/runtime/boot_multithread_probe.cpp'
+      - 'recomp-android/runtime/boot_multithread_probe.hpp'
+      - 'recomp-android/tests/test_boot_vi_setup_probe.cpp'
+      - 'recomp-android/tests/private_original_vi_setup.cpp'
+      - 'recomp-android/tools/verify_private_vi_setup.py'
+permissions:
+  contents: read
+jobs:
+  public-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify harness and synthetic guest VI setup
+        run: |
+          set -euo pipefail
+          python3 -m py_compile recomp-android/tools/verify_private_vi_setup.py
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I recomp-android/tests/boot_fixture -I recomp-android/runtime \
+            recomp-android/runtime/boot_multithread_probe.cpp \
+            recomp-android/tests/test_boot_vi_setup_probe.cpp \
+            -o /tmp/cw-vi-setup-test
+          /tmp/cw-vi-setup-test
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I recomp-android/tests/boot_fixture -I recomp-android/runtime \
+            recomp-android/runtime/boot_multithread_probe.cpp \
+            recomp-android/tests/test_boot_pi_dma_probe.cpp \
+            -o /tmp/cw-pi-regression
+          /tmp/cw-pi-regression
+      - name: Reject ROM or generated code in public repo
+        run: |
+          if find recomp-android -type f \( -name '*.z64' -o -name '*.n64' -o -name '*.v64' -o -name 'funcs_[0-9]*.c' \) -print | grep -q .; then
+            echo 'ROM or generated original game code must remain private'; exit 1
+          fi
