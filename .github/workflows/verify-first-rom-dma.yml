@@ -1,0 +1,59 @@
+name: Verify first original-code ROM DMA interfaces (no ROM)
+on:
+  workflow_dispatch:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/verify-first-rom-dma.yml'
+      - 'recomp-android/runtime/boot_multithread_probe.*'
+      - 'recomp-android/tests/test_boot_pi_dma_probe.cpp'
+      - 'recomp-android/tests/private_original_dma_boot.cpp'
+      - 'recomp-android/tools/verify_private_dma_boot.py'
+permissions:
+  contents: read
+jobs:
+  verify-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native unit tests and syntax
+        run: |
+          set -euo pipefail
+          python3 -m py_compile recomp-android/tools/verify_private_dma_boot.py
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I recomp-android/tests/boot_fixture -I recomp-android/runtime \
+            recomp-android/runtime/boot_multithread_probe.cpp \
+            recomp-android/tests/test_boot_pi_dma_probe.cpp \
+            -o /tmp/cw20-dma-tests
+          /tmp/cw20-dma-tests
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I recomp-android/tests/boot_fixture -I recomp-android/runtime \
+            recomp-android/runtime/boot_multithread_probe.cpp \
+            recomp-android/tests/test_boot_multithread_probe.cpp \
+            -o /tmp/cw19-regression-tests
+          /tmp/cw19-regression-tests
+      - name: Android NDK AArch64 ABI validation
+        run: |
+          set -euo pipefail
+          NDK=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1 || true)
+          if [[ -z "$NDK" ]]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'ndk;27.2.12479018'
+            NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          fi
+          LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$LLVM/aarch64-linux-android28-clang++" -std=c++17 -O2 -fPIC -Wall -Wextra -Werror \
+            -I recomp-android/tests/boot_fixture -I recomp-android/runtime \
+            -c recomp-android/runtime/boot_multithread_probe.cpp -o /tmp/cw20-pi-arm64.o
+          "$LLVM/llvm-readelf" -h /tmp/cw20-pi-arm64.o | grep -q AArch64
+          "$LLVM/llvm-nm" --defined-only /tmp/cw20-pi-arm64.o > /tmp/cw20-symbols.txt
+          for symbol in osPiStartDma_recomp osRecvMesg_recomp osInvalDCache_recomp osCreateMesgQueue_recomp; do
+            grep -Eq " [TW] ${symbol}$" /tmp/cw20-symbols.txt
+          done
+          echo 'PASS: first PI DMA guest interfaces compile to Android ARM64'
+      - name: No commercial ROM or generated game code committed
+        run: |
+          set -euo pipefail
+          if find recomp-android -type f \( -name 'funcs_[0-9]*.c' -o -name '*.z64' -o -name '*.n64' -o -name '*.v64' \) -print | grep -q .; then
+            echo 'Refusing private ROM/game content in public repo'; exit 1
+          fi

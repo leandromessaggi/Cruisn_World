@@ -15,6 +15,12 @@ bool ram_pointer(std::uint64_t address,std::size_t length,std::uint32_t& offset)
     offset=addr & 0x1FFFFFFFu;
     return offset<=RAM_BYTES && length<=RAM_BYTES-offset;
 }
+bool write_word(std::uint64_t address,std::uint32_t value) noexcept {
+    std::uint32_t p=0;
+    if (!ram_pointer(address,4,p) || (p&3)) return false;
+    std::memcpy(active->rdram+p,&value,4);
+    return true;
+}
 bool get_word(std::uint64_t address,std::uint32_t& out) noexcept {
     std::uint32_t p=0;
     if (!ram_pointer(address,4,p) || (p&3))return false;
@@ -96,7 +102,67 @@ void osCreateMesgQueue_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     active->queue_addr=static_cast<std::uint32_t>(ctx->r4);
     active->queue_msgs=static_cast<std::uint32_t>(ctx->r5);
     active->queue_capacity=static_cast<std::uint32_t>(ctx->r6);
+    // N64 OSMesgQueue: mtqueue, fullqueue, validCount, first, msgCount, msg.
+    // Host-side word layout of N64Recomp uses little-endian 32-bit words.
+    const std::uint32_t guest=active->queue_addr;
+    if (!(write_word(guest+0,0) && write_word(guest+4,0) &&
+          write_word(guest+8,0) && write_word(guest+12,0) &&
+          write_word(guest+16,active->queue_capacity) &&
+          write_word(guest+20,active->queue_msgs))) { error();return; }
     if (active->on_first_queue) active->on_first_queue();
     // Stop immediately after first queue creation in private bounded harness.
 }
+}
+
+// Bounded, synchronous PI ROM-read bridge for the PRIVATE original-code probe.
+// Production will require asynchronous PI manager threads and interrupts.
+extern "C" void osInvalDCache_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx))return;
+    std::uint32_t off=0;
+    if(ctx->r5==0 || ctx->r5>0x10000 ||
+       !ram_pointer(ctx->r4,static_cast<std::size_t>(ctx->r5),off)) {error();return;}
+    ++active->cache_invalidations;
+}
+extern "C" void osPiStartDma_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx))return;
+    std::uint32_t dst=0,ramoff=0,length=0;
+    // a0=OSIoMesg, a1=priority, a2=OS_READ, a3=cart offset;
+    // 5th, 6th and 7th args are guest stack words.
+    if(!active->rom || active->rom_bytes==0 || active->mesg_queues!=1 ||
+       active->dma_reads || active->queue_pending || ctx->r5!=0 || ctx->r6!=0 ||
+       !get_word(ctx->r29+16,dst) || !get_word(ctx->r29+20,length) ||
+       !get_word(ctx->r29+24,ramoff) ||
+       ramoff!=active->queue_addr || length==0 || length>0x4000) {error();ctx->r2=~0ull;return;}
+    const std::uint32_t source=static_cast<std::uint32_t>(ctx->r7);
+    std::uint32_t start=0;
+    if(source>active->rom_bytes || length>active->rom_bytes-source ||
+       !ram_pointer(dst,length,start)) {error();ctx->r2=~0ull;return;}
+    // N64Recomp uses word-swizzled guest RAM: a guest byte at A resides at
+    // host RAM[(A & physical_mask) ^ 3] on little-endian hosts.
+    for(std::uint32_t i=0;i<length;++i)
+        active->rdram[(start+i)^3u]=active->rom[source+i];
+    // The test PI device completes synchronously and enqueues the IO message.
+    if(!write_word(active->queue_msgs,static_cast<std::uint32_t>(ctx->r4)) ||
+       !write_word(active->queue_addr+8,1)) {error();ctx->r2=~0ull;return;}
+    active->dma_cart=source;active->dma_ram=dst;active->dma_length=length;
+    active->dma_queue=ramoff;active->message_value=static_cast<std::uint32_t>(ctx->r4);
+    active->queue_pending=1;
+    ++active->dma_reads; ++active->dma_completions;
+    ctx->r2=0;
+}
+extern "C" void osRecvMesg_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx))return;
+    if(static_cast<std::uint32_t>(ctx->r4)!=active->queue_addr ||
+       ctx->r6!=1 || !active->queue_pending || !active->dma_reads) {
+        error();ctx->r2=~0ull;return;
+    }
+    // Optional a1: the game's first DMA waiter passes null.
+    if(ctx->r5 && !write_word(ctx->r5,active->message_value)) {
+        error();ctx->r2=~0ull;return;
+    }
+    if(!write_word(active->queue_addr+8,0)) {error();ctx->r2=~0ull;return;}
+    active->queue_pending=0;
+    ++active->dma_receives;
+    ctx->r2=0;
+    if(active->on_dma_received) active->on_dma_received();
 }

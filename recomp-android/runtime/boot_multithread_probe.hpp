@@ -11,6 +11,16 @@ struct ObservedThread {
 struct BootMultiTrace {
     std::uint8_t* rdram=nullptr;
     std::size_t rdram_bytes=0;
+    // Private integration runs only. ROM bytes are not part of the public test
+    // data and are never embedded in a binary or public repository.
+    const std::uint8_t* rom=nullptr;
+    std::size_t rom_bytes=0;
+    unsigned dma_reads=0, dma_completions=0, dma_receives=0, cache_invalidations=0;
+    std::uint32_t dma_cart=0,dma_ram=0,dma_length=0,dma_queue=0;
+    std::uint32_t message_value=0;
+    unsigned queue_pending=0;
+    void (*on_dma_received)()=nullptr; // bounded-stop test callback
+
     ObservedThread threads[3]{};
     unsigned thread_count=0, starts=0, errors=0;
     unsigned pi_managers=0, priority_changes=0, mesg_queues=0;
