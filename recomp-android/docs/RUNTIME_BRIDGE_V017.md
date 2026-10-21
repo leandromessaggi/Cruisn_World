@@ -40,3 +40,5 @@ g++ -std=c++17 -O2 -Wall -Wextra -Werror \
 ## Próximo bloqueio principal
 
 Integrar N64ModernRuntime/ultramodern, incluindo `osCreateThread`, `osStartThread`, `osRecvMesg(OS_MESG_BLOCK)`, PI, callbacks de interrupção, inicialização específica de World e ligação do `get_function` a todas as funções/overlays. Só então conectar renderização RT64/Vulkan, RSP áudio, gamepad e EEPROM para iniciar e jogar corridas reais.
+
+O workflow ainda compila `basic_os_hooks.cpp` com o compilador C++ do NDK para ARM64 e confere sete nomes exatos com `llvm-nm`. Isso verifica o arquivo objeto Android, **não** vincula as funções do jogo nem prova funcionamento no dispositivo.
