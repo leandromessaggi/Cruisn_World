@@ -1,0 +1,48 @@
+name: Verify Cruis'n World CIC-6106 state (no ROM)
+on:
+  workflow_dispatch:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/verify-cic6106-seed.yml'
+      - 'recomp-android/runtime/cic6106_seed.*'
+      - 'recomp-android/tests/test_cic6106_seed.cpp'
+      - 'recomp-android/tests/private_original_cic_checks.cpp'
+      - 'recomp-android/tools/verify_private_cic6106.py'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: ROM-free synthetic unit tests
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I recomp-android/runtime \
+            recomp-android/runtime/cic6106_seed.cpp \
+            recomp-android/tests/test_cic6106_seed.cpp -o /tmp/cw-cic6106
+          /tmp/cw-cic6106
+          python3 -m py_compile recomp-android/tools/verify_private_cic6106.py
+      - name: Compile CIC boot seed for Android ARM64
+        run: |
+          set -euo pipefail
+          NDK=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1 || true)
+          if [[ -z "$NDK" ]]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'ndk;27.2.12479018'
+            NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          fi
+          LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$LLVM/aarch64-linux-android28-clang++" -std=c++17 -O2 -fPIC -Wall -Wextra -Werror \
+            -I recomp-android/runtime -c recomp-android/runtime/cic6106_seed.cpp \
+            -o /tmp/cw-cic6106-arm64.o
+          "$LLVM/llvm-readelf" -h /tmp/cw-cic6106-arm64.o | grep -q AArch64
+          "$LLVM/llvm-nm" -C --defined-only /tmp/cw-cic6106-arm64.o | grep -q seed_world_us_cic6106
+      - name: Verify no copyrighted ROM in public tree
+        run: |
+          set -euo pipefail
+          if find recomp-android -type f \( -name 'funcs_[0-9]*.c' -o -name '*.z64' -o -name '*.n64' -o -name '*.v64' \) -print | grep -q .; then
+            echo 'Private ROM or generated CPU source detected'; exit 1
+          fi
