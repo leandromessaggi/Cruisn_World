@@ -8,7 +8,7 @@ with tempfile.TemporaryDirectory(prefix='cw-ndk-smoke-') as tmp:
     (root/'include'/'recomp.h').write_text('#define RECOMP_FUNC extern inline __attribute__((weak,noinline))\n')
     (root/'cpu'/'funcs.h').write_text('void cw_smoke(void);\n')
     (root/'cpu'/'funcs_0.c').write_text('#include "recomp.h"\n#include "funcs.h"\nRECOMP_FUNC void cw_smoke(void) {}\n')
-    (root/'cpu'/'funcs_1.c').write_text('#include "recomp.h"\nvoid cw_other(void) { cw_smoke(); }\n')
+    (root/'cpu'/'funcs_1.c').write_text('#include "recomp.h"\n#include "funcs.h"\nvoid cw_other(void) { cw_smoke(); }\n')
     zpath=root/'synthetic.zip'
     with ZipFile(zpath,'w') as z:
         for p in (root/'cpu').iterdir(): z.write(p,p.relative_to(root))
