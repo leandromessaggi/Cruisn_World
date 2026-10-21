@@ -47,7 +47,7 @@ jobs:
             -I recomp-android/tests/fixtures \
             -c recomp-android/runtime/basic_os_hooks.cpp -o /tmp/cw_basic_os_hooks.o
           echo "Inspecting ELF machine type"
-          "$LLVM/llvm-readelf" -h /tmp/cw_basic_os_hooks.o | grep -q AArch64
+          readelf -h /tmp/cw_basic_os_hooks.o | grep -q AArch64
           "$LLVM/llvm-nm" --defined-only /tmp/cw_basic_os_hooks.o > /tmp/hooks.symbols
           for name in osCreateMesgQueue_recomp osSendMesg_recomp osRecvMesg_recomp \
                       osVirtualToPhysical_recomp osInvalDCache_recomp \
