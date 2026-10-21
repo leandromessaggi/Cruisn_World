@@ -1,6 +1,4 @@
 #pragma once
-// CI fixture ONLY: the private original-code test uses N64Recomp's real header.
+// Synthetic register stub for ROM-free CI. Private test uses actual N64Recomp.
 #include <stdint.h>
-typedef struct {
-  uint64_t r2,r4,r5,r6,r7,r29;
-} recomp_context;
+typedef struct {uint64_t r2,r4,r5,r6,r7,r29;} recomp_context;
