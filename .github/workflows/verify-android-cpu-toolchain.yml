@@ -1,0 +1,30 @@
+name: Validate Android ARM64 recompilation (no ROM)
+on:
+  workflow_dispatch:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/verify-android-cpu-toolchain.yml'
+      - 'recomp-android/tools/build_android_cpu.py'
+      - 'recomp-android/tests/test_android_cpu_build.py'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1 || true)
+          if [[ -z "$NDK" ]]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'ndk;27.2.12479018'
+            NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          fi
+          test -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android28-clang"
+          echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
+      - name: Build ROM-free sample with NDK
+        run: python3 recomp-android/tests/test_android_cpu_build.py
