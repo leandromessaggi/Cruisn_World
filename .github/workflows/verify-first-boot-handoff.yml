@@ -1,0 +1,54 @@
+name: Verify bounded Cruis'n World boot handoff (no ROM)
+on:
+  workflow_dispatch:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/verify-first-boot-handoff.yml'
+      - 'recomp-android/runtime/boot_thread_handoff.*'
+      - 'recomp-android/tests/test_boot_thread_handoff.cpp'
+      - 'recomp-android/tests/boot_fixture/recomp.h'
+      - 'recomp-android/tests/private_original_boot_handoff.cpp'
+      - 'recomp-android/tools/verify_private_boot_handoff.py'
+permissions:
+  contents: read
+jobs:
+  boot-handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: ROM-free host ABI test (synthetic register context)
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            -I recomp-android/tests/boot_fixture \
+            -I recomp-android/runtime \
+            recomp-android/runtime/boot_thread_handoff.cpp \
+            recomp-android/tests/test_boot_thread_handoff.cpp \
+            -o /tmp/cw-handoff-test
+          /tmp/cw-handoff-test
+      - name: Cross-compile handoff ABI for Android ARM64 (ROM-free)
+        run: |
+          set -euo pipefail
+          NDK=$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1 || true)
+          if [[ -z "$NDK" ]]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'ndk;27.2.12479018'
+            NDK="$ANDROID_HOME/ndk/27.2.12479018"
+          fi
+          LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          "$LLVM/aarch64-linux-android28-clang++" -std=c++17 -O2 -fPIC -fno-lto -Wall -Wextra -Werror \
+            -I recomp-android/tests/boot_fixture \
+            -I recomp-android/runtime \
+            -c recomp-android/runtime/boot_thread_handoff.cpp -o /tmp/cw-handoff-arm64.o
+          "$LLVM/llvm-readelf" -h /tmp/cw-handoff-arm64.o | grep -q AArch64
+          "$LLVM/llvm-nm" --defined-only /tmp/cw-handoff-arm64.o > /tmp/cw-handoff-nm.txt
+          for symbol in osViBlack_recomp __osInitialize_common_recomp osCreateThread_recomp osStartThread_recomp; do
+            grep -Eq " [TW] ${symbol}$" /tmp/cw-handoff-nm.txt
+          done
+          echo 'PASS: four first-boot ABI entrypoints compile for AArch64.'
+      - name: Ensure no original game-generated CPU code is checked in
+        run: |
+          if find recomp-android -path '*/cpu/funcs_[0-9]*.c' -print | grep -q .; then
+            echo 'Refusing ROM-derived generated game code in public repository'; exit 1
+          fi
