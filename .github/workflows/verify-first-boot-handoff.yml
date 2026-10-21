@@ -37,11 +37,14 @@ jobs:
             NDK="$ANDROID_HOME/ndk/27.2.12479018"
           fi
           LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "NDK: $NDK"
+          set -x
           "$LLVM/aarch64-linux-android28-clang++" -std=c++17 -O2 -fPIC -fno-lto -Wall -Wextra -Werror \
             -I recomp-android/tests/boot_fixture \
             -I recomp-android/runtime \
             -c recomp-android/runtime/boot_thread_handoff.cpp -o /tmp/cw-handoff-arm64.o
-          "$LLVM/llvm-readelf" -h /tmp/cw-handoff-arm64.o | grep -q AArch64
+          "$LLVM/llvm-readelf" -h /tmp/cw-handoff-arm64.o > /tmp/cw-handoff-elf.txt
+          grep -q AArch64 /tmp/cw-handoff-elf.txt
           "$LLVM/llvm-nm" --defined-only /tmp/cw-handoff-arm64.o > /tmp/cw-handoff-nm.txt
           for symbol in osViBlack_recomp __osInitialize_common_recomp osCreateThread_recomp osStartThread_recomp; do
             grep -Eq " [TW] ${symbol}$" /tmp/cw-handoff-nm.txt
