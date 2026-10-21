@@ -35,11 +35,18 @@ jobs:
             NDK="$ANDROID_HOME/ndk/27.2.12479018"
           fi
           LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          set -x
+          df -h /tmp
+          "$LLVM/aarch64-linux-android28-clang++" --version
           "$LLVM/aarch64-linux-android28-clang++" -std=c++17 -O2 -fPIC -Wall -Wextra -Werror \
             -I recomp-android/runtime -c recomp-android/runtime/cic6106_seed.cpp \
             -o /tmp/cw-cic6106-arm64.o
-          "$LLVM/llvm-readelf" -h /tmp/cw-cic6106-arm64.o | grep -q AArch64
-          "$LLVM/llvm-nm" -C --defined-only /tmp/cw-cic6106-arm64.o | grep -q seed_world_us_cic6106
+          "$LLVM/llvm-readelf" -h /tmp/cw-cic6106-arm64.o > /tmp/cw21-elf.txt
+          cat /tmp/cw21-elf.txt
+          grep -q AArch64 /tmp/cw21-elf.txt
+          "$LLVM/llvm-nm" -C --defined-only /tmp/cw-cic6106-arm64.o > /tmp/cw21-symbols.txt
+          cat /tmp/cw21-symbols.txt
+          grep -q seed_world_us_cic6106 /tmp/cw21-symbols.txt
       - name: Verify no copyrighted ROM in public tree
         run: |
           set -euo pipefail
