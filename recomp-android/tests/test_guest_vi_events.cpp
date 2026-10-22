@@ -2,6 +2,7 @@
 // wakeup path. No game ROM, graphics, or host interrupt is involved.
 #include "../android/app/src/main/cpp/recomp_vi_events.hpp"
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -81,6 +82,13 @@ int main() {
   assert(queue.receive(&value)==OsMqStatus::Ok && value==0x29B);
   assert(vi.delivered()==4 && vi.dropped()==1 && vi.invalid()==1);
   assert(clock.viCount()==12);
+  assert(GuestViHostPacer::runTicks(vi,0)==0);
+  assert(GuestViHostPacer::runTicks(vi,601)==0);
+  const auto started=std::chrono::steady_clock::now();
+  assert(GuestViHostPacer::runTicks(vi,3)==3);
+  assert(std::chrono::steady_clock::now()-started>=std::chrono::milliseconds(35));
+  assert(clock.viCount()==15 && vi.delivered()==5 && vi.dropped()==3);
+  assert(queue.receive(&value)==OsMqStatus::Ok && value==0x29B);
   std::remove(path);
   std::puts("PASS: deterministic VI interval, guest OSMesgQueue, priority wakeup, full drop, invalid queue, KSEG1 alias; no graphics/scheduler execution");
 }

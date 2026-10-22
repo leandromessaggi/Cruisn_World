@@ -1,4 +1,6 @@
 #include "recomp_vi_events.hpp"
+#include <chrono>
+#include <thread>
 
 namespace cw {
 bool GuestViEventBridge::setRetrace(std::uint32_t queue,
@@ -30,5 +32,19 @@ ViTickResult GuestViEventBridge::tick() {
   }
   ++invalid_;
   return ViTickResult::InvalidQueue;
+}
+std::uint32_t GuestViHostPacer::runTicks(GuestViEventBridge& bridge,
+                                        std::uint32_t ticks) {
+  // Cap synchronous work to ten seconds. The Android Activity calls this
+  // only from a background Java worker, never from the UI thread.
+  if (ticks == 0 || ticks > 600) return 0;
+  const auto start=std::chrono::steady_clock::now();
+  for (std::uint32_t n=1; n<=ticks; ++n) {
+    const auto due=start+std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+      std::chrono::duration<double>(static_cast<double>(n)/60.0));
+    std::this_thread::sleep_until(due);
+    bridge.tick();
+  }
+  return ticks;
 }
 } // namespace cw

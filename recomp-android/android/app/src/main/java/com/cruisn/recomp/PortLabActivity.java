@@ -25,7 +25,9 @@ public class PortLabActivity extends Activity {
     private static final int PICK_ROM=123;
     private static final String EXPECTED_SHA="5320594232f0c492a672464832425351bd06497c95fb243745e2493bc5df9c2c";
     private TextView log;
+    private Button viButton;
     private static native String nativeBootProbe(String romPath);
+    private static native String nativeViProbe(String romPath);
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -37,12 +39,30 @@ public class PortLabActivity extends Activity {
         title.setTextColor(0xfff3ad56);title.setTextSize(22);
         title.setGravity(Gravity.CENTER_HORIZONTAL);root.addView(title);
         TextView explain=new TextView(this);
-        explain.setText("Etapa v0.11: estado de threads MIPS com registradores GPR/FPR, HI/LO, COP0, PC, espera e retomada por prioridade. Ainda não executa MIPS nem inicia corridas.");
+        explain.setText("Etapa v0.28: diagnóstico de VI com relógio host ~60 Hz, fila libultra e prioridade de threads. Ainda não executa a thread original no Android nem inicia corridas.");
         explain.setTextColor(Color.WHITE);explain.setTextSize(15);root.addView(explain);
         Button pick=new Button(this);pick.setText("SELECIONAR ROM .N64 / .Z64 / .V64 / ZIP");
         root.addView(pick);pick.setOnClickListener(v->{
             Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");
             i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK_ROM);
+        });
+        viButton=new Button(this);
+        viButton.setText("TESTAR VI / THREADS (60 Hz)");
+        viButton.setEnabled(false);
+        root.addView(viButton);
+        viButton.setOnClickListener(v->{
+            viButton.setEnabled(false);
+            log.setText("Executando diagnóstico VI em segundo plano...");
+            new Thread(()->{
+                File verified=new File(getFilesDir(),"cruisn_verified.z64");
+                final String result=verified.isFile()
+                    ? nativeViProbe(verified.getAbsolutePath())
+                    : "[ERRO] ROM validada não encontrada";
+                runOnUiThread(()->{
+                    log.setText(result);
+                    viButton.setEnabled(verified.isFile());
+                });
+            },"vi-diagnostic").start();
         });
         ScrollView scroll=new ScrollView(this);
         log=new TextView(this);log.setTextColor(0xff7be0d6);log.setTextSize(15);
@@ -111,6 +131,9 @@ public class PortLabActivity extends Activity {
     }
     private void verifyFile(File f){
         String probe=nativeBootProbe(f.getAbsolutePath());
-        runOnUiThread(()->log.setText(probe));
+        runOnUiThread(()->{
+            log.setText(probe);
+            viButton.setEnabled(probe.startsWith("[OK]"));
+        });
     }
 }

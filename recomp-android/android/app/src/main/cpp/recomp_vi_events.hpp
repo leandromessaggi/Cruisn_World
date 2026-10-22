@@ -28,4 +28,11 @@ class GuestViEventBridge final {
   std::uint32_t queue_=0, message_=0, interval_=0;
   std::uint64_t registered_at_=0, delivered_=0, dropped_=0, invalid_=0;
 };
+
+// Bounded host-clock diagnostic. Calls tick() on the caller's thread at a
+// nominal 60 Hz; does NOT provide a hardware interrupt or game scheduling.
+class GuestViHostPacer final {
+ public:
+  static std::uint32_t runTicks(GuestViEventBridge& bridge, std::uint32_t ticks);
+};
 } // namespace cw
