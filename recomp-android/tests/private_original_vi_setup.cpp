@@ -17,12 +17,15 @@
 extern "C" void func_802AD450(uint8_t*,recomp_context*);
 extern "C" void func_802AD4C0(uint8_t*,recomp_context*);
 extern "C" void func_802AD8C0(uint8_t*,recomp_context*);
+extern "C" void func_802FB708(uint8_t*,recomp_context*);
 namespace {
 static std::jmp_buf boundary;
 static uint8_t* ram=nullptr;
 static unsigned state=0, pauses[3]{},seeds=0,dispatches=0,bad_dispatches=0;
 static std::uint32_t seed_sp=0;
-static unsigned worker_stop_count=0;
+static unsigned worker_stop_count=0,worker_wait_stops=0,worker_recv_stops=0;
+static void stop_worker_wait() {++worker_wait_stops;std::longjmp(boundary,9);}
+static void stop_worker_recv() {++worker_recv_stops;std::longjmp(boundary,10);}
 static void stop_on_worker_start() {++worker_stop_count;std::longjmp(boundary,8);}
 struct Window {uint8_t* memory;};
 bool seed_word(void* u,std::uint32_t addr,std::uint32_t value) {
@@ -148,7 +151,40 @@ int main(int argc,char** argv) {
     const bool worker=(boot.thread_count==3 && boot.starts==3 &&
         boot.threads[2].id==6 && boot.threads[2].address==0x8035E540u &&
         boot.threads[2].entry==0x802FB708u && boot.threads[2].priority==40u);
-    const bool ok=third_boundary==8 && worker_stop_count==1 && expected_vi && event_details && worker &&
+    // Advance one actual original VI-worker call to the first blocking recv.
+    // This stops at the libultra boundary, not a real host thread wait.
+    boot.on_vi_worker_wait=stop_worker_wait;
+    recomp_context worker_ctx{};
+    worker_ctx.r29=boot.threads[2].stack-0x10u;
+    worker_ctx.r4=boot.threads[2].argument;
+    const int worker_wait_boundary=setjmp(boundary);
+    if(worker_wait_boundary==0) func_802FB708(memory,&worker_ctx);
+    boot.on_vi_worker_wait=nullptr;
+    const bool wait_ok=worker_wait_boundary==9 && worker_wait_stops==1 &&
+        boot.vi_retrace_waits==1 && boot.vi_retrace_received==0 &&
+        boot.errors==0;
+    // Trigger a *manual* deterministic VI tick, not a timer or graphics task.
+    const bool delivered=cw::inject_vi_retrace(boot);
+    std::uint32_t pending_vi=0;
+    std::memcpy(&pending_vi,memory+(boot.queues[1].address&0x1FFFFFFFu)+8,4);
+    const bool queue_ok=delivered && pending_vi==1 && boot.vi_retrace_ticks==1;
+    // Re-entry at the beginning is deliberately a NEW test invocation,
+    // not preservation or resumption of the original MIPS thread context.
+    boot.on_vi_worker_received=stop_worker_recv;
+    recomp_context recv_ctx{};
+    recv_ctx.r29=boot.threads[2].stack-0x10u;
+    recv_ctx.r4=boot.threads[2].argument;
+    const int recv_boundary=setjmp(boundary);
+    if(recv_boundary==0) func_802FB708(memory,&recv_ctx);
+    boot.on_vi_worker_received=nullptr;
+    std::uint32_t pending_after=~0u,seen_message=0;
+    std::memcpy(&pending_after,memory+(boot.queues[1].address&0x1FFFFFFFu)+8,4);
+    const auto slot_addr=static_cast<std::uint32_t>(recv_ctx.r29+0x54u);
+    std::memcpy(&seen_message,memory+(slot_addr&0x1FFFFFFFu),4);
+    const bool receive_ok=recv_boundary==10 && worker_recv_stops==1 &&
+        boot.vi_retrace_received==1 && pending_after==0 && seen_message==0x29Au;
+    const bool ok=wait_ok && queue_ok && receive_ok &&
+        third_boundary==8 && worker_stop_count==1 && expected_vi && event_details && worker &&
         boot.vi_managers==1 && boot.vi_priority==0xFEu && boot.vi_black_calls==3 && vi_queues_valid &&
         imem_result==1 && dmem_result==1 && actual_rom_bytes &&
         boot.dma_reads==1 && boot.dma_completions==1 && boot.dma_receives==1 &&
@@ -160,10 +196,12 @@ int main(int argc,char** argv) {
         boot.entered_count==2 && dispatches==1 && bad_dispatches==0 && seeds==1 && boot.errors==0;
     std::printf("%s: boot DMA & CIC checks, original VI init queued; bytes=%u; "
         "IMEM=%u DMEM=%u; VI_MODE=%08X; EVENT_REG=%u; RETRACE=%u; "
-        "WORKER=%08X; ERRORS=%u; BLACK=%u; COPY_MATCH=%s; scheduling=SEQUENTIAL; gameplay=NO\n",
+        "WORKER=%08X; WAIT=%s; TICK=%s; RECEIVED=%s; ERRORS=%u; BLACK=%u; COPY_MATCH=%s; "
+        "scheduling=SEQUENTIAL; guest_context_resumed=NO; gameplay=NO\n",
         ok?"PASS":"FAIL",boot.dma_length,imem_result,dmem_result,
         boot.vi_mode,boot.vi_event_count,boot.vi_retrace_registrations,
-        boot.threads[2].entry,boot.errors,boot.vi_black_calls,actual_rom_bytes?"YES":"NO");
+        boot.threads[2].entry,wait_ok?"YES":"NO",queue_ok?"YES":"NO",
+        receive_ok?"YES":"NO",boot.errors,boot.vi_black_calls,actual_rom_bytes?"YES":"NO");
     cw::bind_boot_multithread_probe(nullptr);
     munmap(v,reserved);
     return ok?0:3;

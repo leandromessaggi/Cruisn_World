@@ -38,6 +38,24 @@ ObservedThread* find_thread(BootMultiTrace& t,std::uint32_t addr) noexcept {
     for(unsigned i=0;i<t.thread_count;++i)if(t.threads[i].address==addr)return &t.threads[i];
     return nullptr;
 }
+bool inject_vi_retrace(BootMultiTrace& t) noexcept {
+    if(active!=&t || t.vi_retrace_registrations!=1 || t.vi_managers!=1 ||
+       t.vi_retrace_interval!=1 || t.vi_retrace_queue!=t.queues[1].address ||
+       t.vi_retrace_message!=0x29Au || t.mesg_queues!=3 ||
+       t.queues[1].capacity!=8u) return false;
+    const auto& q=t.queues[1];
+    std::uint32_t count=0, first=0, capacity=0, messages=0;
+    if(!get_word(q.address+8,count) || !get_word(q.address+12,first) ||
+       !get_word(q.address+16,capacity) || !get_word(q.address+20,messages) ||
+       capacity!=q.capacity || messages!=q.messages || count>capacity || first>=capacity)
+        return false;
+    if(count==capacity) { ++t.vi_retrace_drops; return false; }
+    const std::uint32_t index=(first+count)%capacity;
+    if(!write_word(q.messages+index*4u,t.vi_retrace_message) ||
+       !write_word(q.address+8,count+1)) return false;
+    ++t.vi_retrace_ticks;
+    return true;
+}
 }
 extern "C" {
 void osViBlack_recomp(std::uint8_t* rdram,recomp_context* ctx) {
@@ -228,6 +246,38 @@ extern "C" void osPiStartDma_recomp(std::uint8_t* rdram,recomp_context* ctx) {
 }
 extern "C" void osRecvMesg_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if(!check(rdram,ctx))return;
+    // The original VI worker starts by waiting on the second queue.
+    // Unlike the production libultra scheduler this diagnostic harness can
+    // only STOP at an empty receive; it must never pretend to block/resume.
+    if(active->vi_retrace_registrations==1 &&
+       static_cast<std::uint32_t>(ctx->r4)==active->vi_retrace_queue) {
+        const auto& q=active->queues[1];
+        std::uint32_t count=0,first=0,capacity=0,messages=0;
+        if(ctx->r6!=1 || !get_word(q.address+8,count) ||
+           !get_word(q.address+12,first) || !get_word(q.address+16,capacity) ||
+           !get_word(q.address+20,messages) || count>capacity || first>=capacity ||
+           capacity!=q.capacity || messages!=q.messages) {
+            error();ctx->r2=~0ull;return;
+        }
+        if(count==0) {
+            ++active->vi_retrace_waits;
+            if(active->on_vi_worker_wait)active->on_vi_worker_wait();
+            // Fail closed: without a bounded-test callback there is no
+            // scheduler to resume the blocked guest thread.
+            error();ctx->r2=~0ull;return;
+        }
+        std::uint32_t msg=0;
+        if(!get_word(q.messages+first*4u,msg) ||
+           (ctx->r5 && !write_word(ctx->r5,msg)) ||
+           !write_word(q.address+12,(first+1u)%capacity) ||
+           !write_word(q.address+8,count-1)) {
+            error();ctx->r2=~0ull;return;
+        }
+        ctx->r2=0;
+        ++active->vi_retrace_received;
+        if(active->on_vi_worker_received)active->on_vi_worker_received();
+        return;
+    }
     if(static_cast<std::uint32_t>(ctx->r4)!=active->queue_addr ||
        ctx->r6!=1 || !active->queue_pending || !active->dma_reads) {
         error();ctx->r2=~0ull;return;

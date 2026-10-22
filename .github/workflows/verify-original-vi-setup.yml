@@ -1,4 +1,4 @@
-name: Verify original NTSC VI registration and worker (ROM-free)
+name: Verify original VI worker retrace delivery (ROM-free)
 on:
   workflow_dispatch:
   push:
@@ -11,6 +11,7 @@ on:
       - 'recomp-android/tests/private_original_vi_setup.cpp'
       - 'recomp-android/tools/verify_private_vi_setup.py'
       - 'recomp-android/docs/ORIGINAL_VI_SETUP_V024.md'
+      - 'recomp-android/docs/ORIGINAL_VI_RETRACE_V025.md'
 permissions:
   contents: read
 jobs:
@@ -19,7 +20,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Verify NTSC VI mode, event registration and DMA regressions
+      - name: Verify VI worker retrace queue, bounded wait, FIFO and DMA regressions
         run: |
           set -euo pipefail
           python3 -m py_compile recomp-android/tools/verify_private_vi_setup.py

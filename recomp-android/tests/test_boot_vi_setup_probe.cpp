@@ -14,6 +14,7 @@ void osViSetMode_recomp(uint8_t*,recomp_context*);
 void osViSetSpecialFeatures_recomp(uint8_t*,recomp_context*);
 void osSetEventMesg_recomp(uint8_t*,recomp_context*);
 void osViSetEvent_recomp(uint8_t*,recomp_context*);
+void osRecvMesg_recomp(uint8_t*,recomp_context*);
 }
 static std::uint32_t load(const std::vector<std::uint8_t>& m, std::uint32_t off) {
     std::uint32_t v=0;std::memcpy(&v,&m[off & 0x1FFFFFFFu],4);return v;
@@ -76,6 +77,44 @@ int main() {
     assert(t.vi_retrace_queue==qa[1] && t.vi_retrace_message==0x29A);
     osViSetEvent_recomp(mem.data(),&c);
     assert(t.errors==10 && t.vi_retrace_registrations==1);
+    // No implicit event delivery: an empty receive must fail closed if there is
+    // no bounded-test callback to stop at the wait boundary.
+    c.r4=qa[1]; c.r5=0x80340000u; c.r6=1;
+    osRecvMesg_recomp(mem.data(),&c);
+    assert(t.errors==11 && t.vi_retrace_waits==1);
+    assert(load(mem,qa[1]+8)==0);
+    // Inject exactly eight deterministic retrace events. Ninth drops without
+    // modifying guest queue metadata or destroying existing messages.
+    for(unsigned i=0;i<8;++i) {
+        assert(cw::inject_vi_retrace(t));
+        assert(load(mem,qa[1]+8)==i+1);
+    }
+    assert(!cw::inject_vi_retrace(t) && t.vi_retrace_drops==1);
+    assert(load(mem,qa[1]+8)==8 && t.vi_retrace_ticks==8);
+    for(unsigned i=0;i<8;++i) {
+        c.r4=qa[1];c.r5=0x80340000u;c.r6=1;
+        osRecvMesg_recomp(mem.data(),&c);
+        assert(c.r2==0 && load(mem,0x80340000u)==0x29Au);
+        assert(load(mem,qa[1]+8)==7-i);
+    }
+    assert(t.vi_retrace_received==8 && load(mem,qa[1]+12)==0);
+    // Wraparound at an offset other than zero.
+    for(unsigned i=0;i<3;++i)assert(cw::inject_vi_retrace(t));
+    for(unsigned i=0;i<2;++i) {
+        c.r4=qa[1];c.r5=0x80340000u;c.r6=1;
+        osRecvMesg_recomp(mem.data(),&c);
+    }
+    assert(load(mem,qa[1]+12)==2 && load(mem,qa[1]+8)==1);
+    for(unsigned i=0;i<7;++i)assert(cw::inject_vi_retrace(t));
+    assert(load(mem,qa[1]+8)==8 && load(mem,qa[1]+12)==2);
+    assert(!cw::inject_vi_retrace(t) && t.vi_retrace_drops==2);
+    for(unsigned i=0;i<8;++i) {
+        c.r4=qa[1];c.r5=0x80340000u;c.r6=1;
+        osRecvMesg_recomp(mem.data(),&c);
+        assert(c.r2==0 && load(mem,0x80340000u)==0x29Au);
+    }
+    assert(load(mem,qa[1]+8)==0 && load(mem,qa[1]+12)==2);
+    assert(t.errors==11 && t.vi_retrace_received==18);
     cw::bind_boot_multithread_probe(nullptr);
-    std::puts("PASS: ROM-free USA NTSC VI mode, three event registrations, retrace, guards");
+    std::puts("PASS: ROM-free VI registration, bounded retrace injection, FIFO, queue full, wrap, recv guards");
 }

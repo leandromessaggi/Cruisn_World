@@ -39,6 +39,12 @@ struct BootMultiTrace {
     struct EventObservation { std::uint32_t event=0, queue=0, message=0; };
     EventObservation vi_events[3]{};
     unsigned vi_event_count=0, vi_retrace_registrations=0;
+    // Explicit VI retrace injection for the bounded *test*; no clock or native
+    // interrupt exists. Metadata is kept in guest OSMesgQueue, not a host FIFO.
+    unsigned vi_retrace_ticks=0, vi_retrace_received=0, vi_retrace_waits=0;
+    unsigned vi_retrace_drops=0;
+    void (*on_vi_worker_wait)()=nullptr; // stop at first empty, blocking recv
+    void (*on_vi_worker_received)()=nullptr; // stop after first successful recv
     void (*on_vi_worker_start)()=nullptr; // stop *after* third guest osStartThread
     void (*on_vi_black)()=nullptr; // harness stops immediately after the second call
     void (*on_first_queue)()=nullptr; // harness-only bounded stop; never production scheduler
@@ -47,6 +53,9 @@ struct BootMultiTrace {
 };
 void bind_boot_multithread_probe(BootMultiTrace*) noexcept;
 ObservedThread* find_thread(BootMultiTrace&, std::uint32_t guest_addr) noexcept;
+// Deliver one deterministic test VI retrace event to the registered guest queue.
+// Returns false without corrupting RAM when full or not registered.
+bool inject_vi_retrace(BootMultiTrace&) noexcept;
 // Prepare only register inputs; the test harness decides which original
 // recompiled function to invoke. Never advances unbounded guest code here.
 }
