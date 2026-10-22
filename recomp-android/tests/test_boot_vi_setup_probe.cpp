@@ -6,6 +6,9 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include <thread>
+#include <atomic>
+#include <chrono>
 extern "C" {
 void osCreateMesgQueue_recomp(uint8_t*,recomp_context*);
 void osCreateViManager_recomp(uint8_t*,recomp_context*);
@@ -115,6 +118,33 @@ int main() {
     }
     assert(load(mem,qa[1]+8)==0 && load(mem,qa[1]+12)==2);
     assert(t.errors==11 && t.vi_retrace_received==18);
+    // A native worker's C stack and recomp_context must survive a blocking
+    // guest osRecvMesg call until an event arrives (one invocation, no restart).
+    cw::ViHostWaitGate gate{};
+    t.vi_host_wait=&gate;
+    const unsigned waits_before=t.vi_retrace_waits;
+    std::atomic<unsigned> returned{0};
+    std::thread guest_worker([&]() {
+        cw::bind_boot_multithread_probe(&t);
+        recomp_context worker{};
+        worker.r4=qa[1];worker.r5=0x80340000u;worker.r6=1;
+        osRecvMesg_recomp(mem.data(),&worker);
+        if(worker.r2==0 && load(mem,0x80340000u)==0x29Du) ++returned;
+        cw::bind_boot_multithread_probe(nullptr);
+    });
+    {
+        std::unique_lock<std::mutex> lk(gate.mutex);
+        const bool waiting=gate.changed.wait_for(lk,std::chrono::seconds(4),[&]{
+            return t.vi_retrace_waits==waits_before+1;
+        });
+        assert(waiting && returned.load()==0);
+    }
+    assert(!cw::inject_registered_vi_event(t,0xDEADu));
+    assert(cw::inject_registered_vi_event(t,0x29Du));
+    guest_worker.join();
+    assert(returned==1 && t.vi_event_injections==1);
+    assert(load(mem,qa[1]+8)==0 && t.errors==11);
+    t.vi_host_wait=nullptr;
     cw::bind_boot_multithread_probe(nullptr);
-    std::puts("PASS: ROM-free VI registration, bounded retrace injection, FIFO, queue full, wrap, recv guards");
+    std::puts("PASS: ROM-free VI registration, bounded retrace injection, FIFO, queue full, wrap, recv guards, original-stack host wait/resume");
 }

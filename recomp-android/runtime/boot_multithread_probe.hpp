@@ -3,7 +3,16 @@
 // No original ROM bytes or recompilation output belong in this header.
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
+#include <mutex>
 namespace cw {
+// Optional PRIVATE test-only host gate. Never emulates the VI timer, and never
+// belongs to guest RDRAM. A native worker can block without restarting C code.
+struct ViHostWaitGate {
+    std::mutex mutex;
+    std::condition_variable changed;
+    bool closing=false;
+};
 struct ObservedThread {
     std::uint32_t address=0, id=0, entry=0, argument=0, stack=0, priority=0;
     bool started=false, entered=false;
@@ -42,7 +51,8 @@ struct BootMultiTrace {
     // Explicit VI retrace injection for the bounded *test*; no clock or native
     // interrupt exists. Metadata is kept in guest OSMesgQueue, not a host FIFO.
     unsigned vi_retrace_ticks=0, vi_retrace_received=0, vi_retrace_waits=0;
-    unsigned vi_retrace_drops=0;
+    unsigned vi_retrace_drops=0, vi_event_injections=0;
+    ViHostWaitGate* vi_host_wait=nullptr;
     void (*on_vi_worker_wait)()=nullptr; // stop at first empty, blocking recv
     void (*on_vi_worker_received)()=nullptr; // stop after first successful recv
     void (*on_vi_worker_start)()=nullptr; // stop *after* third guest osStartThread
@@ -56,6 +66,8 @@ ObservedThread* find_thread(BootMultiTrace&, std::uint32_t guest_addr) noexcept;
 // Deliver one deterministic test VI retrace event to the registered guest queue.
 // Returns false without corrupting RAM when full or not registered.
 bool inject_vi_retrace(BootMultiTrace&) noexcept;
+// Inject only previously registered VI messages, not arbitrary values.
+bool inject_registered_vi_event(BootMultiTrace&, std::uint32_t message) noexcept;
 // Prepare only register inputs; the test harness decides which original
 // recompiled function to invoke. Never advances unbounded guest code here.
 }

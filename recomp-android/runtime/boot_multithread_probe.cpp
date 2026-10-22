@@ -38,23 +38,43 @@ ObservedThread* find_thread(BootMultiTrace& t,std::uint32_t addr) noexcept {
     for(unsigned i=0;i<t.thread_count;++i)if(t.threads[i].address==addr)return &t.threads[i];
     return nullptr;
 }
-bool inject_vi_retrace(BootMultiTrace& t) noexcept {
+// Caller holds vi_host_wait->mutex when a gate is provided.
+static bool inject_message_locked(BootMultiTrace& t,std::uint32_t message) noexcept {
     if(active!=&t || t.vi_retrace_registrations!=1 || t.vi_managers!=1 ||
        t.vi_retrace_interval!=1 || t.vi_retrace_queue!=t.queues[1].address ||
        t.vi_retrace_message!=0x29Au || t.mesg_queues!=3 ||
        t.queues[1].capacity!=8u) return false;
+    bool known=(message==t.vi_retrace_message);
+    for(unsigned i=0;i<t.vi_event_count;++i)
+        known|=(t.vi_events[i].message==message && t.vi_events[i].queue==t.vi_retrace_queue);
+    if(!known) return false;
     const auto& q=t.queues[1];
-    std::uint32_t count=0, first=0, capacity=0, messages=0;
+    std::uint32_t count=0,first=0,capacity=0,messages=0;
     if(!get_word(q.address+8,count) || !get_word(q.address+12,first) ||
        !get_word(q.address+16,capacity) || !get_word(q.address+20,messages) ||
        capacity!=q.capacity || messages!=q.messages || count>capacity || first>=capacity)
         return false;
-    if(count==capacity) { ++t.vi_retrace_drops; return false; }
+    if(count==capacity) {++t.vi_retrace_drops;return false;}
     const std::uint32_t index=(first+count)%capacity;
-    if(!write_word(q.messages+index*4u,t.vi_retrace_message) ||
-       !write_word(q.address+8,count+1)) return false;
-    ++t.vi_retrace_ticks;
+    if(!write_word(q.messages+index*4u,message) ||
+       !write_word(q.address+8,count+1))return false;
+    if(message==t.vi_retrace_message) ++t.vi_retrace_ticks;
+    else ++t.vi_event_injections;
     return true;
+}
+bool inject_registered_vi_event(BootMultiTrace& t,std::uint32_t message) noexcept {
+    if(t.vi_host_wait) {
+        std::unique_lock<std::mutex> lock(t.vi_host_wait->mutex);
+        if(t.vi_host_wait->closing)return false;
+        const bool accepted=inject_message_locked(t,message);
+        lock.unlock();
+        if(accepted)t.vi_host_wait->changed.notify_all();
+        return accepted;
+    }
+    return inject_message_locked(t,message);
+}
+bool inject_vi_retrace(BootMultiTrace& t) noexcept {
+    return inject_registered_vi_event(t,t.vi_retrace_message);
 }
 }
 extern "C" {
@@ -252,19 +272,41 @@ extern "C" void osRecvMesg_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if(active->vi_retrace_registrations==1 &&
        static_cast<std::uint32_t>(ctx->r4)==active->vi_retrace_queue) {
         const auto& q=active->queues[1];
+        std::unique_lock<std::mutex> gate_lock;
+        if(active->vi_host_wait)
+            gate_lock=std::unique_lock<std::mutex>(active->vi_host_wait->mutex);
         std::uint32_t count=0,first=0,capacity=0,messages=0;
-        if(ctx->r6!=1 || !get_word(q.address+8,count) ||
-           !get_word(q.address+12,first) || !get_word(q.address+16,capacity) ||
-           !get_word(q.address+20,messages) || count>capacity || first>=capacity ||
-           capacity!=q.capacity || messages!=q.messages) {
+        auto valid_queue=[&]() noexcept {
+            return get_word(q.address+8,count) &&
+                get_word(q.address+12,first) &&
+                get_word(q.address+16,capacity) &&
+                get_word(q.address+20,messages) && count<=capacity &&
+                first<capacity && capacity==q.capacity && messages==q.messages;
+        };
+        if(ctx->r6!=1 || !valid_queue()) {
             error();ctx->r2=~0ull;return;
         }
         if(count==0) {
             ++active->vi_retrace_waits;
-            if(active->on_vi_worker_wait)active->on_vi_worker_wait();
-            // Fail closed: without a bounded-test callback there is no
-            // scheduler to resume the blocked guest thread.
-            error();ctx->r2=~0ull;return;
+            if(active->vi_host_wait) {
+                auto* gate=active->vi_host_wait;
+                // Notify controller that guest is actually waiting; callback
+                // runs OUTSIDE mutex so test's bounded stop cannot strand it.
+                gate_lock.unlock();
+                gate->changed.notify_all();
+                if(active->on_vi_worker_wait)active->on_vi_worker_wait();
+                gate_lock.lock();
+                gate->changed.wait(gate_lock,[&]() noexcept {
+                    return gate->closing || !valid_queue() || count!=0;
+                });
+                if(gate->closing || !valid_queue()) {
+                    error();ctx->r2=~0ull;return;
+                }
+            } else {
+                if(active->on_vi_worker_wait)active->on_vi_worker_wait();
+                // Without host wait support, preserve fail-closed behavior.
+                error();ctx->r2=~0ull;return;
+            }
         }
         std::uint32_t msg=0;
         if(!get_word(q.messages+first*4u,msg) ||
@@ -275,6 +317,7 @@ extern "C" void osRecvMesg_recomp(std::uint8_t* rdram,recomp_context* ctx) {
         }
         ctx->r2=0;
         ++active->vi_retrace_received;
+        if(gate_lock.owns_lock())gate_lock.unlock();
         if(active->on_vi_worker_received)active->on_vi_worker_received();
         return;
     }
