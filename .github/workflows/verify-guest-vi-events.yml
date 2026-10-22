@@ -1,0 +1,33 @@
+name: Verify native VI queue wakeup (ROM-free)
+on:
+  workflow_dispatch:
+  push:
+    branches: [recomp-android]
+    paths:
+      - '.github/workflows/verify-guest-vi-events.yml'
+      - 'recomp-android/android/app/src/main/cpp/recomp_vi_events.*'
+      - 'recomp-android/android/app/src/main/cpp/recomp_context.*'
+      - 'recomp-android/android/app/src/main/cpp/recomp_thread_wait.*'
+      - 'recomp-android/android/app/src/main/cpp/recomp_os_queue.*'
+      - 'recomp-android/tests/test_guest_vi_events.cpp'
+permissions:
+  contents: read
+jobs:
+  vi-queue-wakeup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run deterministic VI guest-queue integration
+        run: |
+          set -euxo pipefail
+          C=recomp-android/android/app/src/main/cpp
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror \
+            recomp-android/tests/test_guest_vi_events.cpp \
+            "$C/recomp_vi_events.cpp" "$C/recomp_context.cpp" \
+            "$C/recomp_thread_wait.cpp" "$C/recomp_os_queue.cpp" \
+            "$C/recomp_pi.cpp" "$C/recomp_memory.cpp" \
+            "$C/recomp_devices.cpp" "$C/recomp_functions.cpp" \
+            -o /tmp/cw-vi-events-tests
+          cd /tmp
+          ./cw-vi-events-tests
