@@ -43,7 +43,8 @@ int main() {
   snapshot.next_pc=snapshot.pc+4;
   assert(scheduler.saveCurrent(snapshot));
   std::uint32_t value=0;
-  assert(scheduler.recv(q,&value,true)==ThreadOpStatus::Blocked);
+  constexpr std::uint32_t guest_message=0xA03D0400u; // KSEG1 alias
+  assert(scheduler.recvGuest(q,guest_message,true)==ThreadOpStatus::Blocked);
   assert(scheduler.current()==low);
   assert(vi.setRetrace(q,0x29A,2) && vi.interval()==2);
   assert(vi.tick()==ViTickResult::NotDue && clock.viCount()==2);
@@ -55,15 +56,22 @@ int main() {
   assert(completion.status==ThreadOpStatus::Complete &&
          completion.operation==ThreadWaitKind::Receive && completion.message==0x29A);
   MipsCpuContext restored{};
+  std::uint32_t guest_value=0;
+  assert(state.readU32(0x803D0400u,&guest_value) && guest_value==0x29A);
   assert(scheduler.getContext(high,&restored) &&
-         restored.pc==snapshot.pc && restored.gpr[2]==snapshot.gpr[2]);
+         restored.pc==snapshot.pc && restored.gpr[2]==0);
+  assert(scheduler.recvGuest(q,0x803D0404u,false)==ThreadOpStatus::WouldBlock);
+  assert(scheduler.getContext(high,&restored) && restored.gpr[2]==UINT64_MAX);
   assert(queue.canReceive()==OsMqStatus::Empty);
   assert(vi.tick()==ViTickResult::NotDue);
   assert(vi.tick()==ViTickResult::Delivered); // nobody waiting: stays in guest queue
   assert(vi.tick()==ViTickResult::NotDue);
   assert(vi.tick()==ViTickResult::DroppedFull); // nonblocking interrupt, no overwrite
   assert(vi.delivered()==2 && vi.dropped()==1);
-  assert(queue.receive(&value)==OsMqStatus::Ok && value==0x29A);
+  assert(scheduler.recvGuest(q,0xA9000000u,false)==ThreadOpStatus::Invalid);
+  assert(queue.canReceive()==OsMqStatus::Ok); // invalid pointer did not consume
+  assert(scheduler.recvGuest(q,0u,false)==ThreadOpStatus::Complete);
+  assert(scheduler.getContext(high,&restored) && restored.gpr[2]==0);
   assert(queue.canReceive()==OsMqStatus::Empty);
   // Failed re-registration must not replace a valid interval or message.
   assert(!vi.setRetrace(0x12345678,0x29B,1) && vi.interval()==2);
@@ -90,5 +98,5 @@ int main() {
   assert(clock.viCount()==15 && vi.delivered()==5 && vi.dropped()==3);
   assert(queue.receive(&value)==OsMqStatus::Ok && value==0x29B);
   std::remove(path);
-  std::puts("PASS: deterministic VI interval, guest OSMesgQueue, priority wakeup, full drop, invalid queue, KSEG1 alias; no graphics/scheduler execution");
+  std::puts("PASS: VI priority wakeup, guest osRecvMesg destination and v0, nonblocking, null and invalid pointers; no original game execution");
 }

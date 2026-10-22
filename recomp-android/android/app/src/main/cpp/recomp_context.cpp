@@ -105,6 +105,15 @@ void GuestCpuContextScheduler::unblockCompletions() {
     if (t.phase!=GuestCpuPhase::Waiting) continue;
     GuestWaitCompletion c{};
     if (!waiter_.takeCompletion(t.id,&c)) continue;
+    if (t.guest_receive_pending) {
+      if (c.operation!=ThreadWaitKind::Receive ||
+          (c.status==ThreadOpStatus::Complete && t.guest_receive_destination!=0 &&
+           !memory_.writeU32(t.guest_receive_destination,c.message)))
+        c.status=ThreadOpStatus::Invalid;
+      t.context.gpr[2]=(c.status==ThreadOpStatus::Complete) ? 0u : UINT64_MAX;
+      t.guest_receive_pending=false;
+      t.guest_receive_destination=0;
+    }
     t.phase=GuestCpuPhase::Ready;
     t.ready_sequence=sequence_++;
     t.completion=c;
@@ -132,6 +141,34 @@ ThreadOpStatus GuestCpuContextScheduler::recv(std::uint32_t queue,
   unblockCompletions();
   dispatch();
   return status;
+}
+
+ThreadOpStatus GuestCpuContextScheduler::recvGuest(std::uint32_t queue,
+                                                       std::uint32_t destination,
+                                                       bool block) {
+  Thread* active=find(running_);
+  if (!active || active->phase!=GuestCpuPhase::Running ||
+      active->guest_receive_pending) return ThreadOpStatus::Invalid;
+  // Validate the guest destination before consuming any queue message.
+  // Null OSMesg* discards the received value, as permitted by libultra.
+  std::uint32_t unused=0;
+  if (destination!=0 && ((destination&3u)!=0 ||
+      !memory_.readU32(destination,&unused))) {
+    active->context.gpr[2]=UINT64_MAX;
+    return ThreadOpStatus::Invalid;
+  }
+  active->guest_receive_pending=true;
+  active->guest_receive_destination=destination;
+  std::uint32_t value=0;
+  const ThreadOpStatus status=recv(queue,&value,block);
+  if (status==ThreadOpStatus::Blocked) return status;
+  active->guest_receive_pending=false;
+  active->guest_receive_destination=0;
+  const bool written=status!=ThreadOpStatus::Complete || destination==0 ||
+      memory_.writeU32(destination,value);
+  const ThreadOpStatus result=written ? status : ThreadOpStatus::Invalid;
+  active->context.gpr[2]=(result==ThreadOpStatus::Complete) ? 0u : UINT64_MAX;
+  return result;
 }
 
 ThreadOpStatus GuestCpuContextScheduler::send(std::uint32_t queue,

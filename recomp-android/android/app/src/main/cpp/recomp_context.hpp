@@ -46,6 +46,11 @@ class GuestCpuContextScheduler final {
   // Operations of the running thread can leave it waiting without losing its
   // already-saved PC, HI/LO, COP0, GPR or FPR data.
   ThreadOpStatus recv(std::uint32_t queue, std::uint32_t* message, bool block);
+  // libultra-style receive: optional 32-bit guest OSMesg* destination.
+  // Caller saves the translated continuation PC before a blocking call.
+  // Completion updates the guest destination and saved MIPS v0 register.
+  ThreadOpStatus recvGuest(std::uint32_t queue, std::uint32_t guest_message,
+                           bool block);
   ThreadOpStatus send(std::uint32_t queue, std::uint32_t message, bool block);
   OsMqStatus postMessage(std::uint32_t queue, std::uint32_t message);
   std::size_t pump();
@@ -59,6 +64,8 @@ class GuestCpuContextScheduler final {
     MipsCpuContext context{};
     GuestWaitCompletion completion{};
     bool has_completion=false;
+    bool guest_receive_pending=false;
+    std::uint32_t guest_receive_destination=0;
   };
   Thread* find(std::uint32_t id);
   const Thread* find(std::uint32_t id) const;

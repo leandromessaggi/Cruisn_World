@@ -25,7 +25,7 @@ Java_com_cruisn_recomp_PortLabActivity_nativeViProbe(JNIEnv* env, jclass,
       !contexts.createThread(low,20,cw::kMainVram,0x803CF400u) ||
       !contexts.createThread(high,80,cw::kMainVram+0x50u,0x803CF500u) ||
       contexts.dispatch()!=high ||
-      contexts.recv(queue_address,&received,true)!=cw::ThreadOpStatus::Blocked ||
+      contexts.recvGuest(queue_address,0x803E0280u,true)!=cw::ThreadOpStatus::Blocked ||
       contexts.current()!=low || !vi.setRetrace(queue_address,0x29Au,1) ||
       cw::GuestViHostPacer::runTicks(vi,1)!=1 ||
       vi.delivered()!=1 || contexts.current()!=high)
@@ -36,6 +36,11 @@ Java_com_cruisn_recomp_PortLabActivity_nativeViProbe(JNIEnv* env, jclass,
       completion.operation!=cw::ThreadWaitKind::Receive ||
       completion.message!=0x29Au || vi.delivered()!=1 || vi.dropped()!=0)
     return env->NewStringUTF("[ERRO] VI: retorno da fila de mensagens");
+  std::uint32_t guest_received=0;
+  cw::MipsCpuContext resumed{};
+  if (!state.readU32(0x803E0280u,&guest_received) || guest_received!=0x29Au ||
+      !contexts.getContext(high,&resumed) || resumed.gpr[2]!=0)
+    return env->NewStringUTF("[ERRO] VI: destino guest ou retorno MIPS v0");
   // Continue the bounded 60 Hz host-clock diagnostic after the wakeup.
   // The first unconsumed event fills the single-slot queue; subsequent
   // nonblocking VI events must be dropped without overwriting it.
@@ -44,8 +49,8 @@ Java_com_cruisn_recomp_PortLabActivity_nativeViProbe(JNIEnv* env, jclass,
       queue.receive(&received)!=cw::OsMqStatus::Ok || received!=0x29Au)
     return env->NewStringUTF("[ERRO] VI: temporizacao ou fila cheia");
   return env->NewStringUTF(
-      "[OK] v0.28: VI host ~60 Hz -> OSMesgQueue -> prioridade 80\n"
-      "[OK] 5 ticks, 2 entregas, 3 descartes por fila cheia\n"
+      "[OK] v0.29: VI host ~60 Hz -> osRecvMesg guest -> prioridade 80\n"
+      "[OK] MIPS v0=0, mensagem em RDRAM, 5 ticks, 2 entregas, 3 descartes\n"
       "[LIMITE] Diagnostico: sem interrupcao VI do N64, sem codigo original "
       "em execucao e sem corrida jogavel");
 }
