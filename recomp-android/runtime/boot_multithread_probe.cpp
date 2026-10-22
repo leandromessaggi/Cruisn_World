@@ -42,13 +42,65 @@ ObservedThread* find_thread(BootMultiTrace& t,std::uint32_t addr) noexcept {
 extern "C" {
 void osViBlack_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if (!check(rdram,ctx))return;
-    if (ctx->r4!=1 || active->vi_black_calls>=2 ||
-        (active->vi_black_calls==1 && (active->vi_managers!=1 || active->mesg_queues!=3))) {
+    if (ctx->r4!=1 || active->vi_black_calls>=3 ||
+        (active->vi_black_calls==1 && (active->vi_managers!=1 || active->mesg_queues!=3)) ||
+        (active->vi_black_calls==2 && active->vi_mode_calls!=1)) {
         error();return;
     }
     ++active->vi_black_calls;
     active->video_black=true;
-    if (active->vi_black_calls==2 && active->on_vi_black) active->on_vi_black();
+    if (active->vi_black_calls==3 && active->on_vi_black) active->on_vi_black();
+}
+// Bounded, observational VI boot requests. These are NOT real libultra
+// implementations and must not be linked into the playable Android runtime.
+void osViSetMode_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx))return;
+    std::uint32_t off=0;
+    if(active->vi_managers!=1 || active->vi_mode_calls!=0 ||
+       active->vi_black_calls!=2 || !ram_pointer(ctx->r4,0x40,off) || (off&7u)) {
+        error();return;
+    }
+    active->vi_mode=static_cast<std::uint32_t>(ctx->r4);
+    ++active->vi_mode_calls;
+}
+void osViSetSpecialFeatures_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx))return;
+    const auto mask=static_cast<std::uint32_t>(ctx->r4);
+    if(active->vi_mode_calls!=1 || active->vi_black_calls!=3 ||
+       active->vi_special_calls>=1 || mask!=0x52u) {
+        error();return;
+    }
+    active->vi_special_mask=mask;
+    ++active->vi_special_calls;
+}
+void osSetEventMesg_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx))return;
+    constexpr std::uint32_t events[3]={4u,9u,14u};
+    constexpr std::uint32_t messages[3]={0x29Bu,0x29Cu,0x29Du};
+    const unsigned i=active->vi_event_count;
+    if(active->vi_mode_calls!=1 || active->vi_special_calls!=1 ||
+       i>=3 || active->mesg_queues!=3 ||
+       static_cast<std::uint32_t>(ctx->r4)!=events[i] ||
+       static_cast<std::uint32_t>(ctx->r5)!=active->queues[1].address ||
+       static_cast<std::uint32_t>(ctx->r6)!=messages[i]) {
+        error();return;
+    }
+    active->vi_events[i]={events[i],static_cast<std::uint32_t>(ctx->r5),messages[i]};
+    ++active->vi_event_count;
+}
+void osViSetEvent_recomp(std::uint8_t* rdram,recomp_context* ctx) {
+    if(!check(rdram,ctx))return;
+    if(active->vi_event_count!=3 || active->vi_retrace_registrations ||
+       static_cast<std::uint32_t>(ctx->r4)!=active->queues[1].address ||
+       static_cast<std::uint32_t>(ctx->r5)!=0x29Au ||
+       ctx->r6!=1) {
+        error();return;
+    }
+    active->vi_retrace_queue=static_cast<std::uint32_t>(ctx->r4);
+    active->vi_retrace_message=static_cast<std::uint32_t>(ctx->r5);
+    active->vi_retrace_interval=static_cast<std::uint32_t>(ctx->r6);
+    ++active->vi_retrace_registrations;
+    // No periodic VI worker, host timer, or event delivery here.
 }
 void osCreateViManager_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if(!check(rdram,ctx)) return;
@@ -83,6 +135,7 @@ void osStartThread_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if(!t || t->started) {error();return;}
     t->started=true;
     ++active->starts;
+    if (active->starts==3 && active->on_vi_worker_start) active->on_vi_worker_start();
 }
 void osCreatePiManager_recomp(std::uint8_t* rdram,recomp_context* ctx) {
     if(!check(rdram,ctx))return;

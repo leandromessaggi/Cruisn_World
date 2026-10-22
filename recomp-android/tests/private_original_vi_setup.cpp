@@ -22,8 +22,8 @@ static std::jmp_buf boundary;
 static uint8_t* ram=nullptr;
 static unsigned state=0, pauses[3]{},seeds=0,dispatches=0,bad_dispatches=0;
 static std::uint32_t seed_sp=0;
-static unsigned vi_stop_count=0;
-static void stop_on_vi_black() {++vi_stop_count;std::longjmp(boundary,6);}
+static unsigned worker_stop_count=0;
+static void stop_on_worker_start() {++worker_stop_count;std::longjmp(boundary,8);}
 struct Window {uint8_t* memory;};
 bool seed_word(void* u,std::uint32_t addr,std::uint32_t value) {
     auto* m=static_cast<Window*>(u);
@@ -70,6 +70,9 @@ int main(int argc,char** argv) {
     std::memset(memory,0xA5,8u*1024u*1024u);
     Window w{memory};
     if(!cw::seed_world_us_cic6106({&w,seed_word,seed_bytes},rom.data(),rom.size()))return 14;
+    // The retail N64 boot sets osTvType at 0x80000300. USA NTSC = 1.
+    // Earlier bounded probes left it 0xA5A5A5A5 and skipped mode setup.
+    if(!seed_word(&w,0x80000300u,1u))return 15;
     recomp_context ctx{};
     cw::BootMultiTrace boot{};
     boot.rdram=memory; boot.rdram_bytes=8u*1024*1024; boot.rom=rom.data();boot.rom_bytes=rom.size();
@@ -104,11 +107,13 @@ int main(int argc,char** argv) {
     boot.threads[1].entered=true;
     ++boot.entered_count;
     boot.on_dma_received=nullptr;
-    boot.on_vi_black=stop_on_vi_black;
+    boot.on_vi_black=nullptr;
+    boot.on_vi_worker_start=stop_on_worker_start;
     const int third_boundary=setjmp(boundary);
     if(third_boundary==0) func_802AD8C0(memory,&thread3);
     boot.on_dma_received=nullptr;
     boot.on_vi_black=nullptr;
+    boot.on_vi_worker_start=nullptr;
     bool actual_rom_bytes=true;
     for(std::uint32_t i=0;i<0xC0u;++i) {
         const std::uint32_t guest_addr=(0x003E7AE0u+i)^3u;
@@ -130,8 +135,21 @@ int main(int argc,char** argv) {
            rd(expected_q[i]+16)!=capacity || rd(expected_q[i]+20)!=expected_m[i])
             vi_queues_valid=false;
     }
-    const bool ok=third_boundary==6 && vi_stop_count==1 &&
-        boot.vi_managers==1 && boot.vi_priority==0xFEu && boot.vi_black_calls==2 && vi_queues_valid &&
+    const bool expected_vi=(boot.vi_mode_calls==1 && boot.vi_mode==0x8034C3D0u &&
+        boot.vi_special_calls==1 && boot.vi_special_mask==0x52u &&
+        boot.vi_event_count==3 && boot.vi_retrace_registrations==1 &&
+        boot.vi_retrace_queue==0x8035E4D0u && boot.vi_retrace_message==0x29Au &&
+        boot.vi_retrace_interval==1);
+    bool event_details=true;
+    const std::uint32_t ids[3]={4,9,14},values[3]={0x29B,0x29C,0x29D};
+    for(unsigned i=0;i<3;++i) if(boot.vi_events[i].event!=ids[i] ||
+        boot.vi_events[i].queue!=0x8035E4D0u ||
+        boot.vi_events[i].message!=values[i]) event_details=false;
+    const bool worker=(boot.thread_count==3 && boot.starts==3 &&
+        boot.threads[2].id==6 && boot.threads[2].address==0x8035E540u &&
+        boot.threads[2].entry==0x802FB708u && boot.threads[2].priority==40u);
+    const bool ok=third_boundary==8 && worker_stop_count==1 && expected_vi && event_details && worker &&
+        boot.vi_managers==1 && boot.vi_priority==0xFEu && boot.vi_black_calls==3 && vi_queues_valid &&
         imem_result==1 && dmem_result==1 && actual_rom_bytes &&
         boot.dma_reads==1 && boot.dma_completions==1 && boot.dma_receives==1 &&
         boot.dma_cart==0xA6F80u && boot.dma_ram==0x803E7AE0u &&
@@ -141,8 +159,11 @@ int main(int argc,char** argv) {
         boot.queue_addr==0x80360760u && boot.queue_msgs==0x803607F0u &&
         boot.entered_count==2 && dispatches==1 && bad_dispatches==0 && seeds==1 && boot.errors==0;
     std::printf("%s: boot DMA & CIC checks, original VI init queued; bytes=%u; "
-        "IMEM=%u DMEM=%u; VI_QUEUES=%u; VI_PRIORITY=%u; COPY_MATCH=%s; scheduling=SEQUENTIAL; gameplay=NO\n",
-        ok?"PASS":"FAIL",boot.dma_length,imem_result,dmem_result,boot.mesg_queues,boot.vi_priority,actual_rom_bytes?"YES":"NO");
+        "IMEM=%u DMEM=%u; VI_MODE=%08X; EVENT_REG=%u; RETRACE=%u; "
+        "WORKER=%08X; ERRORS=%u; BLACK=%u; COPY_MATCH=%s; scheduling=SEQUENTIAL; gameplay=NO\n",
+        ok?"PASS":"FAIL",boot.dma_length,imem_result,dmem_result,
+        boot.vi_mode,boot.vi_event_count,boot.vi_retrace_registrations,
+        boot.threads[2].entry,boot.errors,boot.vi_black_calls,actual_rom_bytes?"YES":"NO");
     cw::bind_boot_multithread_probe(nullptr);
     munmap(v,reserved);
     return ok?0:3;

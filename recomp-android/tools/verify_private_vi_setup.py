@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run bounded original boot through original VI manager setup, offline only.
+"""Run original USA NTSC VI setup through worker creation, offline only.
 No generated or copyrighted game code is uploaded by this utility.
 Requires files generated from the exact USA ROM used in v0.14.
 """
@@ -70,11 +70,15 @@ def verify(private,public,rom,cc,cxx):
             raise RuntimeError('Boot sequence failed: '+result.stdout+'\n'+result.stderr)
         return {'status':'PASS','original_game_code_executed':True,
                 'recompiled_entrypoints':['0x802AD450','0x802AD4C0','0x802AD8C0','0x802FB3B0'],
-                'pi_manager_observed':True,'first_queue_observed':True,'original_vi_queues_observed':3,'vi_manager_priority':254,'first_rom_dma_confirmed':True,'imem_check_passed':True,'dmem_check_passed':True,'next_game_call_executed':'0x802FB3B0','checkpoint':'osViBlack_recomp second call',
+                'pi_manager_observed':True,'first_queue_observed':True,'original_vi_queues_observed':3,'vi_manager_priority':254,'first_rom_dma_confirmed':True,'imem_check_passed':True,'dmem_check_passed':True,'next_game_call_executed':'0x802FB3B0','checkpoint':'third osStartThread_recomp, VI worker entry 0x802FB708',
                 'cart_offset':'0xA6F80','rdram_address':'0x803E7AE0','dma_length':192,
                 'dma_completed_and_received':True,'guest_bytes_match_rom':True,
                 'guest_threads_scheduled':False,'copy_protection_seeded':True,'vi_manager_observational_only':True,
-                'third_thread_ran_beyond_first_dma_and_sp_checks':True,'graphics_initialized':False,
+                'third_thread_ran_beyond_first_dma_and_sp_checks':True,
+                'os_tv_type':1,'vi_mode':'0x8034C3D0',
+                'vi_event_messages':[0x29B,0x29C,0x29D],
+                'vi_retrace_event_message':0x29A,'vi_worker_entry':'0x802FB708',
+                'vi_worker_executed':False,'graphics_initialized':False,
                 'android_runtime_linked':False,'playable':False,'stdout':result.stdout.strip()}
 
 def main():

@@ -31,6 +31,15 @@ struct BootMultiTrace {
     QueueObservation queues[3]{};
     unsigned vi_managers=0, vi_black_calls=0;
     std::uint32_t vi_priority=0;
+    // Original-code VI initialization. These record *requested* operations;
+    // they do not drive scanout, interrupts or rendering on Android.
+    std::uint32_t vi_mode=0, vi_special_mask=0, vi_retrace_queue=0;
+    std::uint32_t vi_retrace_message=0, vi_retrace_interval=0;
+    unsigned vi_mode_calls=0, vi_special_calls=0;
+    struct EventObservation { std::uint32_t event=0, queue=0, message=0; };
+    EventObservation vi_events[3]{};
+    unsigned vi_event_count=0, vi_retrace_registrations=0;
+    void (*on_vi_worker_start)()=nullptr; // stop *after* third guest osStartThread
     void (*on_vi_black)()=nullptr; // harness stops immediately after the second call
     void (*on_first_queue)()=nullptr; // harness-only bounded stop; never production scheduler
     std::uint32_t manager_queue=0, manager_msgs=0, manager_capacity=0;
