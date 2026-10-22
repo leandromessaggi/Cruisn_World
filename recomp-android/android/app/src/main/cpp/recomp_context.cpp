@@ -114,6 +114,12 @@ void GuestCpuContextScheduler::unblockCompletions() {
       t.guest_receive_pending=false;
       t.guest_receive_destination=0;
     }
+    if (t.guest_send_pending) {
+      if (c.operation!=ThreadWaitKind::Send)
+        c.status=ThreadOpStatus::Invalid;
+      t.context.gpr[2]=(c.status==ThreadOpStatus::Complete) ? 0u : UINT64_MAX;
+      t.guest_send_pending=false;
+    }
     t.phase=GuestCpuPhase::Ready;
     t.ready_sequence=sequence_++;
     t.completion=c;
@@ -148,7 +154,8 @@ ThreadOpStatus GuestCpuContextScheduler::recvGuest(std::uint32_t queue,
                                                        bool block) {
   Thread* active=find(running_);
   if (!active || active->phase!=GuestCpuPhase::Running ||
-      active->guest_receive_pending) return ThreadOpStatus::Invalid;
+      active->guest_receive_pending || active->guest_send_pending)
+    return ThreadOpStatus::Invalid;
   // Validate the guest destination before consuming any queue message.
   // Null OSMesg* discards the received value, as permitted by libultra.
   std::uint32_t unused=0;
@@ -183,6 +190,41 @@ ThreadOpStatus GuestCpuContextScheduler::send(std::uint32_t queue,
   unblockCompletions();
   dispatch();
   return status;
+}
+
+ThreadOpStatus GuestCpuContextScheduler::sendGuest(std::uint32_t queue,
+                                                    std::uint32_t message,
+                                                    bool block) {
+  Thread* active=find(running_);
+  if (!active || active->phase!=GuestCpuPhase::Running ||
+      active->guest_receive_pending || active->guest_send_pending)
+    return ThreadOpStatus::Invalid;
+  active->guest_send_pending=true;
+  const ThreadOpStatus status=send(queue,message,block);
+  if (status==ThreadOpStatus::Blocked) return status;
+  active->guest_send_pending=false;
+  active->context.gpr[2]=(status==ThreadOpStatus::Complete) ? 0u : UINT64_MAX;
+  return status;
+}
+
+ThreadOpStatus GuestCpuContextScheduler::invokeQueueCall(GuestQueueCall call) {
+  Thread* active=find(running_);
+  if (!active || active->phase!=GuestCpuPhase::Running)
+    return ThreadOpStatus::Invalid;
+  // N64 o32 argument words are the low 32 bits of MIPS III GPRs.
+  const auto queue=static_cast<std::uint32_t>(active->context.gpr[4]);
+  const auto value=static_cast<std::uint32_t>(active->context.gpr[5]);
+  const auto flag=static_cast<std::uint32_t>(active->context.gpr[6]);
+  if (flag>1u) {
+    active->context.gpr[2]=UINT64_MAX;
+    return ThreadOpStatus::Invalid;
+  }
+  switch (call) {
+    case GuestQueueCall::Send: return sendGuest(queue,value,flag==1u);
+    case GuestQueueCall::Receive: return recvGuest(queue,value,flag==1u);
+  }
+  active->context.gpr[2]=UINT64_MAX;
+  return ThreadOpStatus::Invalid;
 }
 
 OsMqStatus GuestCpuContextScheduler::postMessage(std::uint32_t queue,

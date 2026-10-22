@@ -74,6 +74,71 @@ int main() {
   assert(s.recv(0x803D0000,&message,false)==ThreadOpStatus::Complete);
   assert(message==0xBADCAFE);
   assert(!s.getContext(0x803D8000,&persisted));
+  // v0.30: o32 a0/a1/a2 -> libultra send/receive, including a blocked
+  // sender's v0 update after the other guest thread opens a queue slot.
+  constexpr std::uint32_t qaddr=0x803D0000u, guest_dst=0x803D0400u;
+  MipsCpuContext abi{};
+  assert(s.current()==high && s.getContext(high,&abi));
+  abi.pc=kMainVram+0x58u;
+  abi.next_pc=abi.pc+4u;
+  abi.gpr[4]=qaddr;
+  abi.gpr[5]=0xFACEFEEDu;
+  abi.gpr[6]=1u; // OS_MESG_BLOCK
+  abi.gpr[2]=0xDEADBEEFu;
+  assert(s.saveCurrent(abi));
+  assert(s.postMessage(qaddr,0x11112222u)==OsMqStatus::Ok);
+  assert(s.invokeQueueCall(GuestQueueCall::Send)==ThreadOpStatus::Blocked);
+  assert(s.current()==low);
+  assert(s.recv(qaddr,&message,false)==ThreadOpStatus::Complete &&
+         message==0x11112222u);
+  assert(s.current()==high);
+  assert(s.takeCompletion(high,&completion) &&
+         completion.operation==ThreadWaitKind::Send &&
+         completion.status==ThreadOpStatus::Complete);
+  assert(s.getContext(high,&persisted) && persisted.pc==abi.pc &&
+         persisted.gpr[2]==0u && persisted.gpr[5]==0xFACEFEEDu);
+  assert(queue.receive(&message)==OsMqStatus::Ok && message==0xFACEFEEDu);
+  abi=persisted;
+  abi.gpr[5]=0xCAFE1234u;
+  abi.gpr[6]=0u; // OS_MESG_NOBLOCK
+  assert(s.saveCurrent(abi));
+  assert(s.invokeQueueCall(GuestQueueCall::Send)==ThreadOpStatus::Complete);
+  assert(s.getContext(high,&persisted) && persisted.gpr[2]==0u);
+  assert(s.invokeQueueCall(GuestQueueCall::Send)==ThreadOpStatus::WouldBlock);
+  assert(s.getContext(high,&persisted) && persisted.gpr[2]==UINT64_MAX);
+  abi=persisted;
+  abi.gpr[6]=2u; // invalid flag: do not modify the queued message
+  assert(s.saveCurrent(abi));
+  assert(s.invokeQueueCall(GuestQueueCall::Send)==ThreadOpStatus::Invalid);
+  assert(queue.receive(&message)==OsMqStatus::Ok && message==0xCAFE1234u);
+  abi.gpr[5]=guest_dst;
+  abi.gpr[6]=0u;
+  assert(s.saveCurrent(abi));
+  assert(s.invokeQueueCall(GuestQueueCall::Receive)==ThreadOpStatus::WouldBlock);
+  assert(s.getContext(high,&persisted) && persisted.gpr[2]==UINT64_MAX);
+  assert(s.postMessage(qaddr,0xDEADBEEFu)==OsMqStatus::Ok);
+  assert(s.invokeQueueCall(GuestQueueCall::Receive)==ThreadOpStatus::Complete);
+  assert(mem.readU32(guest_dst,&message) && message==0xDEADBEEFu);
+  assert(s.getContext(high,&persisted) && persisted.gpr[2]==0u);
+  abi=persisted;
+  abi.gpr[6]=1u;
+  assert(s.saveCurrent(abi));
+  assert(s.invokeQueueCall(GuestQueueCall::Receive)==ThreadOpStatus::Blocked);
+  assert(s.current()==low);
+  assert(s.send(qaddr,0xABCDEF12u,false)==ThreadOpStatus::Complete);
+  assert(s.current()==high);
+  assert(s.takeCompletion(high,&completion) &&
+         completion.operation==ThreadWaitKind::Receive &&
+         completion.status==ThreadOpStatus::Complete);
+  assert(mem.readU32(guest_dst,&message) && message==0xABCDEF12u);
+  assert(s.getContext(high,&persisted) && persisted.gpr[2]==0u);
+  assert(s.postMessage(qaddr,0x9999u)==OsMqStatus::Ok);
+  abi=persisted;
+  abi.gpr[5]=0xA9000000u; // invalid guest destination
+  abi.gpr[6]=0u;
+  assert(s.saveCurrent(abi));
+  assert(s.invokeQueueCall(GuestQueueCall::Receive)==ThreadOpStatus::Invalid);
+  assert(queue.receive(&message)==OsMqStatus::Ok && message==0x9999u);
   std::remove(path);
-  std::cout<<"PASS: MIPS thread snapshot GPR/FPR/COP0/HI/LO/PC, blocking wakeup & priority preemption (no guest execution)\n";
+  std::cout<<"PASS: MIPS snapshot, libultra o32 send/receive ABI, blocking wakeup, v0, priority and queue integrity (no guest execution)\n";
 }

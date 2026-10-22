@@ -21,6 +21,9 @@ struct MipsCpuContext {
 };
 
 enum class GuestCpuPhase { Ready, Running, Waiting, Finished };
+// Entry-point-neutral o32 libultra message calls. The translated caller must
+// save its continuation PC before invoking this adapter.
+enum class GuestQueueCall { Send, Receive };
 
 // Deterministic host-side thread-context bookkeeping layered on the tested
 // libultra-compatible guest queue memory. A saved context is *data*, not an
@@ -52,6 +55,11 @@ class GuestCpuContextScheduler final {
   ThreadOpStatus recvGuest(std::uint32_t queue, std::uint32_t guest_message,
                            bool block);
   ThreadOpStatus send(std::uint32_t queue, std::uint32_t message, bool block);
+  // Guest osSendMesg ABI: updates saved MIPS v0 immediately or on wakeup.
+  ThreadOpStatus sendGuest(std::uint32_t queue, std::uint32_t message, bool block);
+  // Reads o32 a0=queue, a1=message/pointer, a2=OS_MESG_NOBLOCK(0) or
+  // OS_MESG_BLOCK(1). Does not advance PC or resolve libultra symbol addresses.
+  ThreadOpStatus invokeQueueCall(GuestQueueCall call);
   OsMqStatus postMessage(std::uint32_t queue, std::uint32_t message);
   std::size_t pump();
   bool takeCompletion(std::uint32_t id, GuestWaitCompletion* out);
@@ -65,6 +73,7 @@ class GuestCpuContextScheduler final {
     GuestWaitCompletion completion{};
     bool has_completion=false;
     bool guest_receive_pending=false;
+    bool guest_send_pending=false;
     std::uint32_t guest_receive_destination=0;
   };
   Thread* find(std::uint32_t id);

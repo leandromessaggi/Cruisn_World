@@ -24,8 +24,16 @@ Java_com_cruisn_recomp_PortLabActivity_nativeViProbe(JNIEnv* env, jclass,
   if (!queue.create(0x803E0240u,1) ||
       !contexts.createThread(low,20,cw::kMainVram,0x803CF400u) ||
       !contexts.createThread(high,80,cw::kMainVram+0x50u,0x803CF500u) ||
-      contexts.dispatch()!=high ||
-      contexts.recvGuest(queue_address,0x803E0280u,true)!=cw::ThreadOpStatus::Blocked ||
+      contexts.dispatch()!=high)
+    return env->NewStringUTF("[ERRO] VI: inicializacao do diagnostico");
+  cw::MipsCpuContext recv_call{};
+  if (!contexts.getContext(high,&recv_call))
+    return env->NewStringUTF("[ERRO] VI: contexto MIPS");
+  recv_call.gpr[4]=queue_address;
+  recv_call.gpr[5]=0x803E0280u;
+  recv_call.gpr[6]=1u; // OS_MESG_BLOCK
+  if (!contexts.saveCurrent(recv_call) ||
+      contexts.invokeQueueCall(cw::GuestQueueCall::Receive)!=cw::ThreadOpStatus::Blocked ||
       contexts.current()!=low || !vi.setRetrace(queue_address,0x29Au,1) ||
       cw::GuestViHostPacer::runTicks(vi,1)!=1 ||
       vi.delivered()!=1 || contexts.current()!=high)
@@ -48,9 +56,20 @@ Java_com_cruisn_recomp_PortLabActivity_nativeViProbe(JNIEnv* env, jclass,
       clock.viCount()!=5 || vi.delivered()!=2 || vi.dropped()!=3 ||
       queue.receive(&received)!=cw::OsMqStatus::Ok || received!=0x29Au)
     return env->NewStringUTF("[ERRO] VI: temporizacao ou fila cheia");
+  cw::MipsCpuContext send_call{};
+  if (!contexts.getContext(high,&send_call))
+    return env->NewStringUTF("[ERRO] VI: contexto MIPS send");
+  send_call.gpr[4]=queue_address;
+  send_call.gpr[5]=0x29Bu;
+  send_call.gpr[6]=0u; // OS_MESG_NOBLOCK
+  if (!contexts.saveCurrent(send_call) ||
+      contexts.invokeQueueCall(cw::GuestQueueCall::Send)!=cw::ThreadOpStatus::Complete ||
+      !contexts.getContext(high,&send_call) || send_call.gpr[2]!=0 ||
+      queue.receive(&received)!=cw::OsMqStatus::Ok || received!=0x29Bu)
+    return env->NewStringUTF("[ERRO] VI: osSendMesg ABI");
   return env->NewStringUTF(
-      "[OK] v0.29: VI host ~60 Hz -> osRecvMesg guest -> prioridade 80\n"
-      "[OK] MIPS v0=0, mensagem em RDRAM, 5 ticks, 2 entregas, 3 descartes\n"
+      "[OK] v0.30: VI ~60 Hz -> o32 osRecvMesg/osSendMesg -> prioridade 80\n"
+      "[OK] MIPS v0=0, RDRAM, 5 ticks, 2 entregas, 3 descartes\n"
       "[LIMITE] Diagnostico: sem interrupcao VI do N64, sem codigo original "
       "em execucao e sem corrida jogavel");
 }
